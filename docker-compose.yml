@@ -1,0 +1,42 @@
+services:
+  pg:
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=long
+      - TZ=Asia/Shanghai
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d long"]
+      interval: 1s
+      timeout: 30s
+      retries: 30
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      pg:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://user:password@pg/long
+      - GIN_MODE=release
+    env_file: .env
+    
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        API_BASE: ${API_BASE}
+    ports:
+      - "5173:80"
+    environment:
+      - NODE_ENV=PRODUCTION
+
+volumes:
+  pgdata:
