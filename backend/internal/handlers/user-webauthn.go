@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/base64"
 	"long/internal/config"
 	"long/internal/db"
@@ -18,7 +17,7 @@ func BeginAddPasskey(c *gin.Context) {
 	userID := c.GetInt64("UserID")
 	w := config.GetWebAuthn()
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	user, err := db.Query().GetUser(ctx, userID)
 	if err != nil {
@@ -63,7 +62,7 @@ func ValidateAddPasskey(c *gin.Context) {
 	userID := c.GetInt64("UserID")
 	w := config.GetWebAuthn()
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	user, err := db.Query().GetUser(ctx, userID)
 	if err != nil {
@@ -115,7 +114,7 @@ func ValidateAddPasskey(c *gin.Context) {
 
 func DeletePasskey(c *gin.Context) {
 	userID := c.GetInt64("UserID")
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	kid := c.Param("id")
 
@@ -151,7 +150,7 @@ type EditPasskeyPayload struct {
 
 func EditPasskey(c *gin.Context) {
 	userID := c.GetInt64("UserID")
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	kid := c.Param("id")
 
@@ -196,7 +195,7 @@ func textArray(a []protocol.AuthenticatorTransport) []string {
 func GetPasskey(c *gin.Context) {
 	userID := c.GetInt64("UserID")
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	keys, err := db.Query().GetPasskey(ctx, userID)
 

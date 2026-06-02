@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"crypto/rand"
 	"long/internal/db"
 	"long/internal/sqlc"
@@ -14,7 +13,7 @@ import (
 func GetAppKey(c *gin.Context) {
 	userID := c.GetInt64("UserID")
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	keys, err := db.Query().GetAppKeysByUser(ctx, userID)
 
@@ -52,7 +51,7 @@ func CreateAppKey(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	key := "long-" + rand.Text()
 
@@ -115,7 +114,7 @@ func EditAppKey(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	key, err := db.Query().GetAppKeyById(ctx, id)
 
@@ -162,7 +161,7 @@ func DeleteAppKey(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	key, err := db.Query().GetAppKeyById(ctx, id)
 

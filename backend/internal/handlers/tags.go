@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"long/internal/db"
 	"long/internal/sqlc"
 	"long/internal/utils"
@@ -30,7 +29,7 @@ func TagAutocomplete(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	tags, err := db.Query().GetTagsWithPrefix(ctx, sqlc.GetTagsWithPrefixParams{
 		Prefix: payload.Prefix,
@@ -50,7 +49,7 @@ func TagAutocomplete(c *gin.Context) {
 func GetRecommendedTags(c *gin.Context) {
 	userID := c.GetInt64("UserID")
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	tags, err := db.Query().GetFavoriteTags(ctx, sqlc.GetFavoriteTagsParams{
 		UserID: userID,
@@ -70,7 +69,7 @@ type RandomImagePayload struct {
 }
 
 func GetRandomImagesByTag(c *gin.Context) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	var payload RandomImagePayload
 

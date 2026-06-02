@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"long/internal/db"
 	"long/internal/sqlc"
 	"long/internal/utils"
@@ -19,7 +18,7 @@ func GetFavoriteState(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	userID := c.GetInt64("UserID")
 
 	fav, err := db.Query().GetFavoriteState(ctx, sqlc.GetFavoriteStateParams{
@@ -42,7 +41,7 @@ type GetFavoritesResponse struct {
 func GetFavorites(c *gin.Context) {
 	offset, limit := utils.Pagination(c)
 	userID := c.GetInt64("UserID")
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	fav, err := db.Query().GetFavoriteImages(ctx, sqlc.GetFavoriteImagesParams{
 		Offset: int32(offset),
@@ -87,7 +86,7 @@ func SetFavoriteShortcut(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	userID := c.GetInt64("UserID")
 
 	shortcut := pgtype.Text{
@@ -128,7 +127,7 @@ func AddFavorite(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	userID := c.GetInt64("UserID")
 
 	var shortcut = pgtype.Text{
@@ -164,7 +163,7 @@ func DeleteFavorite(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	userID := c.GetInt64("UserID")
 
 	err = db.Query().DeleteFavorite(ctx, sqlc.DeleteFavoriteParams{

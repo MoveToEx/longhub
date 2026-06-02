@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"long/internal/config"
 	"long/internal/db"
 	"long/internal/sqlc"
@@ -36,7 +35,7 @@ func LoginRoute(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	user, err := db.Query().GetUserByName(ctx, payload.Username)
 
@@ -75,7 +74,7 @@ func RegisterRoute(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 
@@ -114,7 +113,7 @@ func BeginWebAuthnLogin(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	sid, err := utils.SaveWebAuthnSession(ctx, session)
 
 	if err != nil {
@@ -129,7 +128,7 @@ func BeginWebAuthnLogin(c *gin.Context) {
 
 func ValidateWebAuthnLogin(c *gin.Context) {
 	w := config.GetWebAuthn()
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	sid, err := c.Cookie("sid")
 	if err != nil {
 		utils.ErrorResponse(c, 400, "Invalid request")
@@ -189,7 +188,7 @@ func GetIdentity(c *gin.Context) {
 	userID := c.GetInt64("UserID")
 	authorization := c.GetString("AuthorizedVia")
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	user, err := db.Query().GetUser(ctx, userID)
 

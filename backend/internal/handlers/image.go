@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"long/internal/config"
 	"long/internal/constant"
 	"long/internal/db"
@@ -39,7 +38,7 @@ func GetImage(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	img, err := db.Query().GetImage(ctx, id)
 
 	if err != nil {
@@ -77,7 +76,7 @@ func GetImageVersions(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	ver, err := db.Query().GetImageVersions(ctx, id)
 
@@ -97,7 +96,7 @@ type ListImagesResponse struct {
 func ListImages(c *gin.Context) {
 	offset, limit := utils.Pagination(c)
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	img, err := db.Query().ListImages(ctx, sqlc.ListImagesParams{
 		Limit:  int32(limit),
@@ -143,7 +142,7 @@ func SearchImages(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	img, err := db.Query().FilterImages(ctx, sqlc.FilterImagesParams{
 		Limit:       int32(limit),
@@ -184,7 +183,7 @@ func QuickSearchImages(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	var result []QuickSearchResponse
 
@@ -273,7 +272,7 @@ func UpdateImage(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	current, err := db.Query().GetImage(ctx, imageID)
 
@@ -353,7 +352,7 @@ func CreateUploadSession(c *gin.Context) {
 	client := config.GetS3Client()
 	presigner := s3.NewPresignClient(client)
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	key, err := gonanoid.New()
 
@@ -439,7 +438,7 @@ func AcknowledgeSession(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	sess, err := db.Query().CompleteUploadSession(ctx, sqlc.CompleteUploadSessionParams{
 		ID:     payload.SessionID,

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"long/internal/db"
 	"long/internal/sqlc"
 	"long/internal/types"
@@ -14,7 +13,7 @@ import (
 func GetSelf(c *gin.Context) {
 	userID := c.GetInt64("UserID")
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	user, err := db.Query().GetUser(ctx, userID)
 
@@ -40,7 +39,7 @@ func GetUser(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	user, err := db.Query().GetOther(ctx, userID)
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when collecting user: %v", err)
@@ -73,7 +72,7 @@ func GetUserContribution(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	contribution, err := db.Query().GetUserContribution(ctx, userID)
 
@@ -100,7 +99,7 @@ func ListImagesByUser(c *gin.Context) {
 
 	offset, limit := utils.Pagination(c)
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	img, err := db.Query().GetImagesByUser(ctx, sqlc.GetImagesByUserParams{
 		UserID: userID,
@@ -141,7 +140,7 @@ func UpdatePreference(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	result := types.Preference{
 		HideNSFW:    new(false),

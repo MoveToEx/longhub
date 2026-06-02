@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"long/internal/db"
 	"long/internal/utils"
 	"strings"
@@ -49,7 +48,7 @@ func Auth(strict bool) gin.HandlerFunc {
 
 			c.Next()
 		case "Key":
-			ctx := context.Background()
+			ctx := c.Request.Context()
 			user, err := db.Query().GetUserByAppKey(ctx, parts[1])
 
 			if err != nil {
