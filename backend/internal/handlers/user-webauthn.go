@@ -44,12 +44,7 @@ func BeginAddPasskey(c *gin.Context) {
 		return
 	}
 
-	sid, _ := utils.RandomBase64String(32)
-
-	err = db.Query().CreateWebAuthnSession(ctx, sqlc.CreateWebAuthnSessionParams{
-		ID:   sid,
-		Data: *session,
-	})
+	sid, err := utils.SaveWebAuthnSession(ctx, session)
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when creating session")
 		return
@@ -82,7 +77,7 @@ func ValidateAddPasskey(c *gin.Context) {
 		return
 	}
 
-	session, err := db.Query().GetWebAuthnSession(ctx, sid)
+	session, err := utils.GetWebAuthnSession(ctx, sid)
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when getting session")
 		return
@@ -94,7 +89,7 @@ func ValidateAddPasskey(c *gin.Context) {
 		return
 	}
 
-	cred, err := w.FinishRegistration(*wu, session.Data, c.Request)
+	cred, err := w.FinishRegistration(*wu, *session, c.Request)
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when generating credential: %s", err.Error())
 		return

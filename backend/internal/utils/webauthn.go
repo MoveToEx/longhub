@@ -2,11 +2,15 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"long/internal/config"
 	"long/internal/db"
 	"long/internal/sqlc"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/valkey-io/valkey-go"
 )
 
 type WebAuthnUser struct {
@@ -66,4 +70,48 @@ func parseTransport(a []string) []protocol.AuthenticatorTransport {
 		out[i] = protocol.AuthenticatorTransport(v)
 	}
 	return out
+}
+
+func SaveWebAuthnSession(ctx context.Context, data *webauthn.SessionData) (string, error) {
+	sid, err := RandomBase64String(32)
+
+	if err != nil {
+		return "", err
+	}
+
+	key := fmt.Sprintf("webauthn:%s", sid)
+	value, err := json.Marshal(data)
+
+	if err != nil {
+		return "", err
+	}
+
+	client := config.Valkey()
+
+	cmd := client.B().Set().Key(key).Value(valkey.BinaryString(value)).Build()
+	err = client.Do(ctx, cmd).Error()
+
+	if err != nil {
+		return "", err
+	}
+
+	return sid, nil
+}
+
+func GetWebAuthnSession(ctx context.Context, sid string) (*webauthn.SessionData, error) {
+	key := fmt.Sprintf("webauthn:%s", sid)
+	client := config.Valkey()
+
+	bytes, err := client.Do(ctx, client.B().Get().Key(key).Build()).AsBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	data := new(webauthn.SessionData)
+
+	if err := json.Unmarshal(bytes, data); err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }

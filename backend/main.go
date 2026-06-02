@@ -39,6 +39,7 @@ func main() {
 	db.Init(ctx, conn)
 	queue.Init(conn)
 	config.InitS3()
+	config.InitValkey()
 
 	if err := config.InitWebAuthn(); err != nil {
 		log.Fatalln("Failed when initializing WebAuthn. Check your environment variables.")

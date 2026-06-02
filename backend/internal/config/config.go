@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/joho/godotenv"
+	"github.com/valkey-io/valkey-go"
 )
 
 type JWTConfig struct {
@@ -37,6 +38,7 @@ type WebAuthnConfig struct {
 
 type Config struct {
 	DatabaseURL string
+	ValkeyAddr  string
 	CORSOrigin  string
 	JWT         JWTConfig
 	S3          S3Config
@@ -99,6 +101,7 @@ func LoadConfig() {
 	config = Config{
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		CORSOrigin:  os.Getenv("CORS_ORIGIN"),
+		ValkeyAddr:  os.Getenv("VALKEY_ADDR"),
 		JWT: JWTConfig{
 			PrivateKey: mustParsePrivateKey(os.Getenv("JWT_SECRET_KEY")),
 			SessionTTL: 72,
@@ -166,4 +169,20 @@ func InitWebAuthn() error {
 
 func GetWebAuthn() *webauthn.WebAuthn {
 	return webAuthn
+}
+
+var vkClient valkey.Client
+
+func InitValkey() {
+	var err error
+	vkClient, err = valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{config.ValkeyAddr},
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func Valkey() valkey.Client {
+	return vkClient
 }

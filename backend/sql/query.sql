@@ -412,14 +412,6 @@ LIMIT $2;
 -- ###################
 -- # WebAuthn
 
--- name: GetWebAuthnSession :one
-SELECT * FROM webauthn_session
-WHERE id = $1;
-
--- name: CreateWebAuthnSession :exec
-INSERT INTO webauthn_session(id, data)
-VALUES ($1, $2);
-
 -- name: GetCredentials :many
 SELECT * FROM webauthn_passkey
 WHERE user_id = $1;

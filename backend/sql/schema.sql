@@ -133,16 +133,6 @@ CREATE TABLE IF NOT EXISTS "webhook" (
 	PRIMARY KEY("id")
 );
 
-
-
-CREATE TABLE IF NOT EXISTS "webauthn_session" (
-	"id" TEXT NOT NULL,
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-	"data" JSONB NOT NULL,
-	PRIMARY KEY("id")
-);
-
-
 CREATE TABLE IF NOT EXISTS "webauthn_passkey" (
 	"id" BYTEA NOT NULL,
 	"name" TEXT NOT NULL DEFAULT 'Unnamed',
