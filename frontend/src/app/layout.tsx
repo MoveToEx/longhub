@@ -5,6 +5,7 @@ import AppTopBar from "@/app/components/topbar";
 import { Toaster } from "@/shared/components/ui/sonner";
 import { ThemeProvider } from "@/app/components/theme-provider";
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
+import EditShortcutDialog from "@/features/images/components/edit-shortcut-dialog";
 
 
 export default function Layout() {
@@ -13,6 +14,7 @@ export default function Layout() {
       <SidebarProvider>
         <div className='h-screen w-screen flex flex-row'>
           <Toaster position='top-center' />
+          <EditShortcutDialog />
           <AppSidebar />
           <div className='w-full h-screen flex flex-col'>
             <AppTopBar />

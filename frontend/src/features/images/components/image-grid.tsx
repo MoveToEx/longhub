@@ -1,11 +1,9 @@
 import { Button } from "@/shared/components/ui/button";
-import { Dialog as BaseDialog } from "@base-ui/react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/shared/components/ui/hover-card";
 import { Spinner } from "@/shared/components/ui/spinner";
 import { Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import EditShortcutDialog, { type Payload as ShortcutPayload } from "@/features/images/components/edit-shortcut-dialog";
 import { copyImage } from "@/shared/lib/utils";
 import type { Image } from "@/shared/lib/types";
 import LikeButton from "./like-button";
@@ -45,10 +43,9 @@ function CopyButton({
   )
 }
 
-function Image({ id, imageUrl, onCustomize }: {
+function Image({ id, imageUrl }: {
   id: number,
   imageUrl: string,
-  onCustomize: () => void
 }) {
   return (
     <HoverCard>
@@ -58,29 +55,22 @@ function Image({ id, imageUrl, onCustomize }: {
         </a>
       } />
       <HoverCardContent className='flex flex-row justify-evenly'>
-        <LikeButton
-          id={id}
-          customizeAction={() => onCustomize()}/>
+        <LikeButton id={id} />
         <CopyButton url={imageUrl} />
       </HoverCardContent>
     </HoverCard>
   )
 }
 
-const customizeHandle = BaseDialog.createHandle<ShortcutPayload>();
-
 export default function ImageGrid({ items }: {
   items: GridItem[]
 }) {
   return (
     <div className='w-full h-full'>
-      <EditShortcutDialog handle={customizeHandle} />
       <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2'>
         {items.map(it => (
           <div key={it.id}>
-            <Image id={it.id} imageUrl={it.imageUrl} onCustomize={() => {
-              customizeHandle.openWithPayload({ ...it, shortcut: '' });
-            }} />
+            <Image id={it.id} imageUrl={it.imageUrl} />
           </div>
         ))}
       </div>

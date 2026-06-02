@@ -6,16 +6,16 @@ import useFavorites from "@/features/favorites/hooks/use-favorites"
 import useImageFavoriteState from "@/features/images/hooks/use-image-favorite-state";
 import useAuth from "@/features/auth/hooks/use-auth";
 import api from "@/shared/lib/axios";
-import { Dialog as BaseDialog } from "@base-ui/react";
 import { mutate } from "@/shared/lib/swr";
 import { copyImage } from "@/shared/lib/utils";
 import { Bookmark, Copy, Edit, Heart } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
-import EditShortcutDialog, { type Payload as ShortcutPayload } from "@/features/images/components/edit-shortcut-dialog";
 import { RequiresLogin } from "@/shared/components/utils";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/shared/components/ui/empty";
+import { useAppDispatch } from "@/shared/hooks/use-redux";
+import { openEditShortcutDialog } from "@/features/images/state/edit-shortcut-dialog-slice";
 
 function LikeButton({
   id
@@ -122,9 +122,8 @@ function Image({ id, imageUrl, shortcut, date, onEdit }: {
   )
 }
 
-const editHandle = BaseDialog.createHandle<ShortcutPayload>();
-
 export default function FavoritesPage() {
+  const dispatch = useAppDispatch();
   const [searchParams, setSearchParams] = useSearchParams({
     p: "1"
   });
@@ -134,7 +133,6 @@ export default function FavoritesPage() {
   return (
     <div className='w-full h-full'>
       <RequiresLogin />
-      <EditShortcutDialog handle={editHandle} />
 
       {isLoading && (
         <div className='w-full h-32 flex flex-row items-center justify-center gap-2'>
@@ -167,7 +165,7 @@ export default function FavoritesPage() {
               shortcut={it.shortcut}
               date={new Date(it.favoritedAt)}
               onEdit={() => {
-                editHandle.openWithPayload({ ...it, shortcut: it.shortcut ?? '' });
+                dispatch(openEditShortcutDialog({ id: it.id, shortcut: it.shortcut ?? '' }));
               }}
             />
           </div>

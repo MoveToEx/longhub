@@ -5,14 +5,15 @@ import useAuth from "@/features/auth/hooks/use-auth";
 import api from "@/shared/lib/axios";
 import { Heart } from "lucide-react";
 import { toast } from "sonner";
+import { useAppDispatch } from "@/shared/hooks/use-redux";
+import { openEditShortcutDialog } from "@/features/images/state/edit-shortcut-dialog-slice";
 
 export default function LikeButton({
   id,
-  customizeAction,
 }: {
   id: number,
-  customizeAction: () => void
 }) {
+  const dispatch = useAppDispatch();
   const { data: user } = useAuth();
   const { data, isValidating, mutate } = useImageFavoriteState(id);
 
@@ -35,7 +36,7 @@ export default function LikeButton({
           toast.success('Added to favorites', {
             action: {
               label: 'Customize',
-              onClick: () => customizeAction()
+              onClick: () => dispatch(openEditShortcutDialog({ id, shortcut: '' }))
             }
           })
         }
