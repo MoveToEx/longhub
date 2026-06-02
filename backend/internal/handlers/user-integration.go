@@ -82,13 +82,8 @@ func CreateAppKey(c *gin.Context) {
 }
 
 type EditAppKeyPayload struct {
-	Label      *string `json:"name"`
+	Label      *string `json:"label"`
 	Permission *int64  `json:"permission"`
-}
-
-type EditAppKeyResponse struct {
-	ID  int64  `json:"id"`
-	Key string `json:"key"`
 }
 
 func EditAppKey(c *gin.Context) {
