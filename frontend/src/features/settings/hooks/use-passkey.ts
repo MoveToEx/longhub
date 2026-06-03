@@ -1,3 +1,4 @@
+import api from "@/shared/lib/axios";
 import useTaggedSWR from "@/shared/lib/swr";
 
 type PasskeyResponse = {
@@ -10,8 +11,12 @@ type PasskeyResponse = {
 
 export default function usePasskey() {
   return useTaggedSWR<[], PasskeyResponse>({
-    type: 'GET',
-    url: '/user/webauthn',
-    tags: ['settings', 'passkey', 'self']
+    id: 'passkeys',
+    args: [],
+    fetcher: async () => {
+      const response = await api.get('/user/webauthn');
+      return response.data.data;
+    },
+    tags: ['settings', 'passkey', 'self'],
   });
 }

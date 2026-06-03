@@ -1,4 +1,5 @@
 import type { Tag } from "@/shared/lib/types";
+import api from "@/shared/lib/axios";
 import useTaggedSWR from "@/shared/lib/swr";
 
 type FavoriteTagsResponse = (Tag & {
@@ -7,9 +8,18 @@ type FavoriteTagsResponse = (Tag & {
 
 export default function useFavoriteTags() {
   return useTaggedSWR<[], FavoriteTagsResponse>({
-    type: 'GET',
-    url: '/recommend',
+    id: 'favorite-tags',
+    args: [],
+    fetcher: async () => {
+      const response = await api.get('/recommend');
+      return response.data.data;
+    },
     tags: ['tag', 'favorite', 'self'],
-    immutable: true
+    immutable: true,
+    config: {
+      revalidateIfStale: false,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    },
   });
 }

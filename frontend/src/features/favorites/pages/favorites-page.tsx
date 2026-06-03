@@ -3,56 +3,14 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/shared/componen
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/shared/components/ui/pagination";
 import { Spinner } from "@/shared/components/ui/spinner";
 import useFavorites from "@/features/favorites/hooks/use-favorites"
-import useImageFavoriteState from "@/features/images/hooks/use-image-favorite-state";
-import useAuth from "@/features/auth/hooks/use-auth";
-import api from "@/shared/lib/axios";
-import { mutate } from "@/shared/lib/swr";
 import { copyImage } from "@/shared/lib/utils";
-import { Bookmark, Copy, Edit, Heart } from "lucide-react";
+import { Bookmark, Copy } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { RequiresLogin } from "@/shared/components/utils";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/shared/components/ui/empty";
-import { useAppDispatch } from "@/shared/hooks/use-redux";
-import { openEditShortcutDialog } from "@/features/images/state/edit-shortcut-dialog-slice";
-
-function LikeButton({
-  id
-}: {
-  id: number
-}) {
-  const { data: user } = useAuth();
-  const { data, isValidating } = useImageFavoriteState(id);
-
-  return (
-    <Button
-      onClick={async () => {
-        await api.delete(`/favorite/${id}`);
-        await mutate('favorite');
-        toast.success('Removed from favorites');
-      }}
-      variant='outline'
-      disabled={isValidating || !user}>
-      {isValidating && <Spinner />}
-      {!isValidating && <Heart fill={data ? '#f84a63' : '#ffffff'} />}
-      Like
-    </Button>
-  )
-}
-
-function EditButton({ id, onClick }: { id: number, onClick: () => void }) {
-  const { isValidating } = useImageFavoriteState(id);
-  return (
-    <Button
-      onClick={() => onClick()}
-      variant='outline'>
-      {isValidating && <Spinner />}
-      {!isValidating && <Edit />}
-      Edit
-    </Button>
-  )
-}
+import LikeButton from "@/features/images/components/like-button";
 
 function CopyButton({
   url
@@ -87,12 +45,11 @@ function CopyButton({
   )
 }
 
-function Image({ id, imageUrl, shortcut, date, onEdit }: {
+function Image({ id, imageUrl, shortcut, date }: {
   id: number,
   imageUrl: string,
   shortcut: string | null,
   date: Date,
-  onEdit: () => void,
 }) {
   return (
     <HoverCard>
@@ -114,7 +71,6 @@ function Image({ id, imageUrl, shortcut, date, onEdit }: {
         </div>
         <div className='flex flex-row justify-evenly gap-4 mx-4'>
           <LikeButton id={id} />
-          <EditButton id={id} onClick={() => onEdit()} />
           <CopyButton url={imageUrl} />
         </div>
       </HoverCardContent>
@@ -123,7 +79,6 @@ function Image({ id, imageUrl, shortcut, date, onEdit }: {
 }
 
 export default function FavoritesPage() {
-  const dispatch = useAppDispatch();
   const [searchParams, setSearchParams] = useSearchParams({
     p: "1"
   });
@@ -164,9 +119,6 @@ export default function FavoritesPage() {
               imageUrl={it.imageUrl}
               shortcut={it.shortcut}
               date={new Date(it.favoritedAt)}
-              onEdit={() => {
-                dispatch(openEditShortcutDialog({ id: it.id, shortcut: it.shortcut ?? '' }));
-              }}
             />
           </div>
         ))}

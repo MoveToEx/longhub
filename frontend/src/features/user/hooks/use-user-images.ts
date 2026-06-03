@@ -1,3 +1,4 @@
+import api from "@/shared/lib/axios";
 import useTaggedSWR from "@/shared/lib/swr";
 import type { Image, Version } from "@/shared/lib/types";
 
@@ -7,9 +8,13 @@ type UserImagesResponse = {
 }
 
 export default function useUserImages(userId: number) {
-  return useTaggedSWR<[], UserImagesResponse>({
-    type: 'GET',
-    url: `/user/${userId}/image`,
-    tags: ['user', 'image']
+  return useTaggedSWR<[number], UserImagesResponse>({
+    id: 'user-images',
+    args: [userId],
+    fetcher: async (userId) => {
+      const response = await api.get(`/user/${userId}/image`);
+      return response.data.data;
+    },
+    tags: ['user', 'image'],
   });
 }

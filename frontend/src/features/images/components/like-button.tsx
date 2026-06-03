@@ -15,36 +15,31 @@ export default function LikeButton({
 }) {
   const dispatch = useAppDispatch();
   const { data: user } = useAuth();
-  const { data, isValidating, mutate } = useImageFavoriteState(id);
+  const { data, isLoading, mutate } = useImageFavoriteState(id);
 
   return (
     <Button
       onClick={async () => {
         if (data) {
-          await api.delete(`/favorite/${id}`);
+          dispatch(openEditShortcutDialog({ id, shortcut: data.shortcut ?? '' }));
+          return;
         }
-        else {
-          await api.post('/favorite', {
-            imageId: id
-          });
-        }
+
+        await api.post('/favorite', {
+          imageId: id
+        });
         await mutate();
-        if (data) {
-          toast.success('Removed from favorites');
-        }
-        else {
-          toast.success('Added to favorites', {
-            action: {
-              label: 'Customize',
-              onClick: () => dispatch(openEditShortcutDialog({ id, shortcut: '' }))
-            }
-          })
-        }
+        toast.success('Added to favorites', {
+          action: {
+            label: 'Customize',
+            onClick: () => dispatch(openEditShortcutDialog({ id, shortcut: '' }))
+          }
+        })
       }}
       variant='outline'
-      disabled={isValidating || !user}>
-      {isValidating && <Spinner />}
-      {!isValidating && <Heart fill={data ? '#f84a63' : '#ffffff'} />}
+      disabled={isLoading || !user}>
+      {isLoading && <Spinner />}
+      {!isLoading && <Heart fill={data ? '#f84a63' : '#ffffff'} />}
       Like
     </Button>
   )

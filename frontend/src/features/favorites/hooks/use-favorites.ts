@@ -1,4 +1,5 @@
 import type { Image, Version } from "@/shared/lib/types";
+import api from "@/shared/lib/axios";
 import useTaggedSWR from "@/shared/lib/swr";
 
 type ImagesResponse = {
@@ -10,13 +11,18 @@ type ImagesResponse = {
 }
 
 export default function useFavorites(offset: number = 0, limit: number = 48) {
-  return useTaggedSWR<[], ImagesResponse>({
-    type: 'GET',
-    url: '/favorite',
-    query: {
-      offset: offset.toString(),
-      limit: limit.toString(),
+  return useTaggedSWR<[number, number], ImagesResponse>({
+    id: 'favorites',
+    args: [offset, limit],
+    fetcher: async (offset, limit) => {
+      const response = await api.get('/favorite', {
+        params: {
+          offset: offset.toString(),
+          limit: limit.toString(),
+        },
+      });
+      return response.data.data;
     },
-    tags: ['image', 'favorite', 'self']
+    tags: ['image', 'favorite', 'self'],
   });
 }

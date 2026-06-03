@@ -1,3 +1,4 @@
+import api from "@/shared/lib/axios";
 import useTaggedSWR from "@/shared/lib/swr";
 
 type ContributionResponse = {
@@ -7,9 +8,13 @@ type ContributionResponse = {
 }[]
 
 export default function useUserContribution(userId: number) {
-  return useTaggedSWR<[], ContributionResponse>({
-    type: 'GET',
-    url: `/user/${userId}/contribution`,
-    tags: ['user', 'contribution']
+  return useTaggedSWR<[number], ContributionResponse>({
+    id: 'user-contribution',
+    args: [userId],
+    fetcher: async (userId) => {
+      const response = await api.get(`/user/${userId}/contribution`);
+      return response.data.data;
+    },
+    tags: ['user', 'contribution'],
   });
 }

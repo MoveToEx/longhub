@@ -1,4 +1,4 @@
-import { LogIn } from "lucide-react";
+import { LogIn, Trash } from "lucide-react";
 import { Spinner } from "@/shared/components/ui/spinner";
 import { useForm, Controller } from 'react-hook-form'
 import z from 'zod'
@@ -75,6 +75,29 @@ export default function EditShortcutDialog() {
     }
   }
 
+  const onUnfavorite = async () => {
+    if (!payload) return;
+
+    setLoading(true);
+    try {
+      await api.delete(`/favorite/${payload.id}`);
+      await mutate('favorite');
+      toast.success('Removed from favorites');
+      dispatch(closeEditShortcutDialog());
+    }
+    catch (e) {
+      if (e instanceof AxiosError) {
+        form.setError('root', {
+          type: 'custom',
+          message: e.response?.data.error
+        });
+      }
+    }
+    finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <Dialog
       open={open}
@@ -117,6 +140,15 @@ export default function EditShortcutDialog() {
 
 
           <DialogFooter>
+            <Button
+              type='button'
+              variant='destructive'
+              disabled={loading}
+              onClick={() => onUnfavorite()}>
+              {loading && <Spinner />}
+              {loading || <Trash />}
+              Unfavorite
+            </Button>
             <Button type='submit' disabled={loading}>
               {loading && <Spinner />}
               {loading || <LogIn />}

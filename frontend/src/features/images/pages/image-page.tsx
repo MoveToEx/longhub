@@ -26,6 +26,8 @@ import TagsInput from "@/features/tags/components/tags-input";
 import { ToggleGroup, ToggleGroupItem } from "@/shared/components/ui/toggle-group";
 import type { Rating } from "@/shared/lib/types";
 import _ from "lodash";
+import LikeButton from "../components/like-button";
+import { Alert, AlertDescription } from "@/shared/components/ui/alert";
 
 
 type Payload = {
@@ -74,7 +76,7 @@ function RevertDialog({ handle }: { handle: BaseDialog.Handle<Payload> }) {
               <div>
                 You're about to revert image to the following state:
               </div>
-              <ul className='flex flex-col gap-1'>
+              <ul className='flex flex-col gap-1 mb-4'>
                 <li>
                   <Pilcrow size={12} className='inline' /> Text: {payload?.text}
                 </li>
@@ -86,9 +88,13 @@ function RevertDialog({ handle }: { handle: BaseDialog.Handle<Payload> }) {
                   <ShieldAlert size={12} className='inline' /> Rating: {payload?.rating}
                 </li>
               </ul>
-              <div className='text-secondary-foreground'>
-                <InfoIcon size={12} className='inline' /> Reverting will create a new version with desired metadata, instead of deleting all versions after one.
-              </div>
+
+              <Alert>
+                <InfoIcon />
+                <AlertDescription>
+                  Reverting will create a new version with desired metadata, instead of deleting all versions after it.
+                </AlertDescription>
+              </Alert>
             </div>
 
             <DialogFooter>
@@ -297,7 +303,6 @@ function Info({ id }: { id: number }) {
 
   return (
     <div className='w-full h-auto flex flex-col justify-center items-start gap-2'>
-      <EditDialog handle={editHandle} />
 
       {isLoading && (
         <Card className='my-2 w-full rounded-md py-4'>
@@ -328,7 +333,7 @@ function Info({ id }: { id: number }) {
               Created at {new Date(data.createdAt).toLocaleDateString()} by {data.userIdentifier.username}
             </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className='flex flex-row gap-4 flex-wrap'>
             <Button variant='outline' onClick={() => {
               editHandle.openWithPayload({
                 ...data,
@@ -337,6 +342,8 @@ function Info({ id }: { id: number }) {
             }}>
               <Edit /> Edit
             </Button>
+
+            <LikeButton id={data.id} />
           </CardFooter>
         </Card>
       )}
@@ -352,7 +359,6 @@ function Versions({ id }: { id: number }) {
 
   return (
     <Card className='py-2 rounded-md'>
-      <RevertDialog handle={revertHandle} />
 
       {isLoading && (
         <div className='flex flex-col items-center justify-center gap-2'>
@@ -438,6 +444,8 @@ export default function ImagePage() {
 
   return (
     <div className='w-full grid grid-cols-12 gap-4'>
+      <EditDialog handle={editHandle} />
+      <RevertDialog handle={revertHandle} />
       <div className='col-span-12 md:col-span-4'>
         <Image id={Number(id)} />
       </div>

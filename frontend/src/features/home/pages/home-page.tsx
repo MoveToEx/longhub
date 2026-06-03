@@ -78,7 +78,7 @@ function RecommendedImages() {
       {data.map(it => (
         <div key={it.id} className='w-full flex flex-col'>
           <div className='text-xl'>
-            Images under #{it.name}
+            #{it.name}
           </div>
           <RecommendedImagesRow tag={it.name} />
         </div>

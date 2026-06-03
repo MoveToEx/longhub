@@ -7,8 +7,8 @@ export default function useAuth() {
   const [session, , reset] = useLocalStorage('nmsl-session', '');
 
   return {
-    ...useTaggedSWR({
-      type: '$custom',
+    ...useTaggedSWR<[string], Identity | null>({
+      id: 'auth',
       tags: ['user', 'auth'],
       args: [session],
       async fetcher(session) {
