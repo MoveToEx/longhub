@@ -29,6 +29,22 @@ func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error 
 	return err
 }
 
+const commitUnindexedVersions = `-- name: CommitUnindexedVersions :exec
+UPDATE image
+SET indexed_version = $2
+WHERE id = $1
+`
+
+type CommitUnindexedVersionsParams struct {
+	ID             int64       `json:"id"`
+	IndexedVersion pgtype.Int8 `json:"indexedVersion"`
+}
+
+func (q *Queries) CommitUnindexedVersions(ctx context.Context, arg CommitUnindexedVersionsParams) error {
+	_, err := q.db.Exec(ctx, commitUnindexedVersions, arg.ID, arg.IndexedVersion)
+	return err
+}
+
 const completeUploadSession = `-- name: CompleteUploadSession :one
 UPDATE public.upload_session
 SET "completed_at" = NOW(), "status" = 'completed'
@@ -829,6 +845,54 @@ func (q *Queries) GetImageVersions(ctx context.Context, imageID int64) ([]GetIma
 	return items, nil
 }
 
+const getImagesByIds = `-- name: GetImagesByIds :many
+SELECT v.text, v.rating, im.id, im.image_url, ARRAY(
+  SELECT name
+  FROM tag t
+  WHERE EXISTS (
+    SELECT 1 FROM version_tag vt
+    WHERE vt.version_id = v.id AND vt.tag_id = t.id
+  )
+)::TEXT[] AS tags FROM image im
+INNER JOIN version v ON im.current_version_id = v.id
+WHERE im.id = ANY($1::BIGINT[])
+ORDER BY ARRAY_POSITION($1::BIGINT[], im.id)
+`
+
+type GetImagesByIdsRow struct {
+	Text     string   `json:"text"`
+	Rating   Rating   `json:"rating"`
+	ID       int64    `json:"id"`
+	ImageUrl string   `json:"imageUrl"`
+	Tags     []string `json:"tags"`
+}
+
+func (q *Queries) GetImagesByIds(ctx context.Context, ids []int64) ([]GetImagesByIdsRow, error) {
+	rows, err := q.db.Query(ctx, getImagesByIds, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetImagesByIdsRow{}
+	for rows.Next() {
+		var i GetImagesByIdsRow
+		if err := rows.Scan(
+			&i.Text,
+			&i.Rating,
+			&i.ID,
+			&i.ImageUrl,
+			&i.Tags,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getImagesByUser = `-- name: GetImagesByUser :many
 SELECT
     image.id, text, rating, image_url, image_key, current_version_id FROM image
@@ -1073,6 +1137,89 @@ func (q *Queries) GetTagsWithPrefix(ctx context.Context, arg GetTagsWithPrefixPa
 	for rows.Next() {
 		var i Tag
 		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUnindexedVersions = `-- name: GetUnindexedVersions :many
+
+WITH candidates AS (
+    SELECT DISTINCT ON (v.image_id)
+        v.id
+    FROM image im
+    JOIN version v ON im.id = v.image_id
+    WHERE im.indexed_version IS NULL
+       OR im.indexed_version != v.id
+    ORDER BY v.image_id DESC, v.created_at DESC
+    LIMIT 8
+)
+SELECT
+    v.id, v.created_at, v.image_id, v.version, v.text, v.rating, v.user_id,
+    im.id, im.created_at, im.updated_at, im.deleted_at, im.user_id, im.image_key, im.image_url, im.image_hash, im.active_deletion_id, im.current_version_id, im.indexed_version,
+    ARRAY(
+      SELECT name
+      FROM tag t
+      WHERE EXISTS (
+        SELECT 1 FROM version_tag vt
+        WHERE vt.version_id = v.id AND vt.tag_id = t.id
+      )
+    )::TEXT[] AS tags
+FROM candidates c
+JOIN version v ON v.id = c.id
+JOIN image im ON im.id = v.image_id
+FOR UPDATE OF im SKIP LOCKED
+`
+
+type GetUnindexedVersionsRow struct {
+	ID        int64            `json:"id"`
+	CreatedAt pgtype.Timestamp `json:"createdAt"`
+	ImageID   int64            `json:"imageId"`
+	Version   int32            `json:"version"`
+	Text      string           `json:"text"`
+	Rating    Rating           `json:"rating"`
+	UserID    int64            `json:"userId"`
+	Image     Image            `json:"image"`
+	Tags      []string         `json:"tags"`
+}
+
+// #######################
+// # Meilisearch indexing
+func (q *Queries) GetUnindexedVersions(ctx context.Context) ([]GetUnindexedVersionsRow, error) {
+	rows, err := q.db.Query(ctx, getUnindexedVersions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUnindexedVersionsRow{}
+	for rows.Next() {
+		var i GetUnindexedVersionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.ImageID,
+			&i.Version,
+			&i.Text,
+			&i.Rating,
+			&i.UserID,
+			&i.Image.ID,
+			&i.Image.CreatedAt,
+			&i.Image.UpdatedAt,
+			&i.Image.DeletedAt,
+			&i.Image.UserID,
+			&i.Image.ImageKey,
+			&i.Image.ImageUrl,
+			&i.Image.ImageHash,
+			&i.Image.ActiveDeletionID,
+			&i.Image.CurrentVersionID,
+			&i.Image.IndexedVersion,
+			&i.Tags,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1407,86 +1554,6 @@ func (q *Queries) QuickSearchFavorites(ctx context.Context, arg QuickSearchFavor
 	items := []QuickSearchFavoritesRow{}
 	for rows.Next() {
 		var i QuickSearchFavoritesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.ImageUrl,
-			&i.Text,
-			&i.Rating,
-			&i.Relevance,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const quickSearchImage = `-- name: QuickSearchImage :many
-WITH current_version AS (
-  SELECT DISTINCT ON (image_id)
-         id AS version_id,
-         image_id,
-         text, rating
-  FROM version
-  ORDER BY image_id, version DESC
-),
-
-text_hits AS (
-  SELECT
-    cv.image_id,
-    SUM(similarity(cv.text, q.term)) AS text_score
-  FROM current_version cv,
-       unnest($1::TEXT[]) AS q(term)
-  WHERE cv.text LIKE '%' || q.term || '%'
-  GROUP BY cv.image_id
-),
-
-tag_hits AS (
-  SELECT
-    cv.image_id, COUNT(*) * 0.5 AS tag_score
-  FROM current_version cv
-  JOIN version_tag vt
-    ON vt.version_id = cv.version_id
-  JOIN tag t
-    ON t.id = vt.tag_id
-  WHERE t.name = ANY ($1::TEXT[])
-  GROUP BY cv.image_id
-)
-
-SELECT
-  i.id, i.image_url, cv.text, cv.rating, 
-  (COALESCE(th.text_score, 0.0) + COALESCE(tg.tag_score, 0.0))::FLOAT AS relevance
-FROM image i
-JOIN current_version cv ON cv.image_id = i.id
-LEFT JOIN text_hits th ON th.image_id = i.id
-LEFT JOIN tag_hits tg ON tg.image_id = i.id
-WHERE
-  th.image_id IS NOT NULL
-  OR tg.image_id IS NOT NULL
-ORDER BY relevance DESC, i.id
-LIMIT 12
-`
-
-type QuickSearchImageRow struct {
-	ID        int64   `json:"id"`
-	ImageUrl  string  `json:"imageUrl"`
-	Text      string  `json:"text"`
-	Rating    Rating  `json:"rating"`
-	Relevance float64 `json:"relevance"`
-}
-
-func (q *Queries) QuickSearchImage(ctx context.Context, keywords []string) ([]QuickSearchImageRow, error) {
-	rows, err := q.db.Query(ctx, quickSearchImage, keywords)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []QuickSearchImageRow{}
-	for rows.Next() {
-		var i QuickSearchImageRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ImageUrl,

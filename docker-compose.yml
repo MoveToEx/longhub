@@ -21,6 +21,16 @@ services:
       timeout: 30s
       retries: 30
       start_period: 1s
+  meilisearch:
+    image: getmeili/meilisearch:v1.45.2
+    environment:
+      - MEILI_MASTER_KEY=MASTER_KEY
+    healthcheck:
+      test: ["curl", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
   backend:
     build:
       context: ./backend
@@ -32,6 +42,9 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgres://user:password@pg/long
+      - VALKEY_ADDR=valkey:6379
+      - MEILISEARCH_URL=http://meilisearch:7700
+      - MEILISEARCH_KEY=MASTER_KEY
       - GIN_MODE=release
     env_file: .env
     

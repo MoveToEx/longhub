@@ -19,10 +19,10 @@ import (
 )
 
 func main() {
-	config.LoadConfig()
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	config.Init()
 
 	conn, err := pgxpool.New(ctx, config.GetConfig().DatabaseURL)
 
@@ -36,15 +36,12 @@ func main() {
 		return
 	}
 
+	if err := config.InitClients(); err != nil {
+		panic(err)
+	}
+
 	db.Init(ctx, conn)
 	queue.Init(conn)
-	config.InitS3()
-	config.InitValkey()
-
-	if err := config.InitWebAuthn(); err != nil {
-		log.Fatalln("Failed when initializing WebAuthn. Check your environment variables.")
-		return
-	}
 
 	app := gin.New()
 

@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,6 +19,9 @@ func Init(conn *pgxpool.Pool) error {
 	if err := river.AddWorkerSafely(workers, &HashWorker{}); err != nil {
 		return err
 	}
+	if err := river.AddWorkerSafely(workers, &IndexWorker{}); err != nil {
+		return err
+	}
 
 	var err error
 
@@ -28,6 +32,18 @@ func Init(conn *pgxpool.Pool) error {
 			},
 		},
 		Workers: workers,
+		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(
+				river.PeriodicInterval(3*time.Second),
+				func() (river.JobArgs, *river.InsertOpts) {
+					return IndexArgs{}, nil
+				},
+				&river.PeriodicJobOpts{
+					ID:         "ms-index",
+					RunOnStart: true,
+				},
+			),
+		},
 	})
 
 	if err != nil {

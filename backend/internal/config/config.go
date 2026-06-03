@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/joho/godotenv"
+	"github.com/meilisearch/meilisearch-go"
 	"github.com/valkey-io/valkey-go"
 )
 
@@ -37,12 +38,14 @@ type WebAuthnConfig struct {
 }
 
 type Config struct {
-	DatabaseURL string
-	ValkeyAddr  string
-	CORSOrigin  string
-	JWT         JWTConfig
-	S3          S3Config
-	WebAuthn    WebAuthnConfig
+	DatabaseURL    string
+	ValkeyAddr     string
+	MeiliSearchURL string
+	MeiliSearchKey string
+	CORSOrigin     string
+	JWT            JWTConfig
+	S3             S3Config
+	WebAuthn       WebAuthnConfig
 }
 
 var config Config
@@ -91,7 +94,16 @@ func mustParsePublicKey(s string) ed25519.PublicKey {
 	return result
 }
 
-func LoadConfig() {
+func GetConfig() *Config {
+	return &config
+}
+
+var s3client *s3.Client
+var webAuthn *webauthn.WebAuthn
+var vkClient valkey.Client
+var msClient meilisearch.ServiceManager
+
+func Init() {
 	err := godotenv.Load()
 
 	if err != nil {
@@ -99,9 +111,11 @@ func LoadConfig() {
 	}
 
 	config = Config{
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		CORSOrigin:  os.Getenv("CORS_ORIGIN"),
-		ValkeyAddr:  os.Getenv("VALKEY_ADDR"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		CORSOrigin:     os.Getenv("CORS_ORIGIN"),
+		ValkeyAddr:     os.Getenv("VALKEY_ADDR"),
+		MeiliSearchURL: os.Getenv("MEILISEARCH_URL"),
+		MeiliSearchKey: os.Getenv("MEILISEARCH_KEY"),
 		JWT: JWTConfig{
 			PrivateKey: mustParsePrivateKey(os.Getenv("JWT_SECRET_KEY")),
 			SessionTTL: 72,
@@ -122,13 +136,9 @@ func LoadConfig() {
 	}
 }
 
-func GetConfig() *Config {
-	return &config
-}
+func InitClients() error {
+	var err error
 
-var s3client *s3.Client
-
-func InitS3() {
 	cfg := aws.Config{
 		Region: "us-east-1",
 		Credentials: aws.NewCredentialsCache(
@@ -143,16 +153,6 @@ func InitS3() {
 		o.UsePathStyle = true
 		o.BaseEndpoint = aws.String(config.S3.Endpoint)
 	})
-}
-
-func GetS3Client() *s3.Client {
-	return s3client
-}
-
-var webAuthn *webauthn.WebAuthn
-
-func InitWebAuthn() error {
-	var err error
 
 	webAuthn, err = webauthn.New(&webauthn.Config{
 		RPID:          GetConfig().WebAuthn.RPID,
@@ -164,25 +164,29 @@ func InitWebAuthn() error {
 		return err
 	}
 
+	vkClient, err = valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{config.ValkeyAddr},
+	})
+	if err != nil {
+		return err
+	}
+
+	msClient = meilisearch.New(config.MeiliSearchURL, meilisearch.WithAPIKey(config.MeiliSearchKey))
 	return nil
+}
+
+func GetS3Client() *s3.Client {
+	return s3client
 }
 
 func GetWebAuthn() *webauthn.WebAuthn {
 	return webAuthn
 }
 
-var vkClient valkey.Client
-
-func InitValkey() {
-	var err error
-	vkClient, err = valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{config.ValkeyAddr},
-	})
-	if err != nil {
-		panic(err)
-	}
-}
-
 func Valkey() valkey.Client {
 	return vkClient
+}
+
+func MeiliSearch() meilisearch.ServiceManager {
+	return msClient
 }

@@ -8,11 +8,13 @@ import (
 	"long/internal/utils"
 	"mime"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	gonanoid "github.com/matoous/go-nanoid/v2"
+	"github.com/meilisearch/meilisearch-go"
 )
 
 type User struct {
@@ -167,12 +169,19 @@ type QuickSearchPayload struct {
 }
 
 type QuickSearchResponse struct {
-	ID        int64       `json:"id"`
-	ImageUrl  string      `json:"imageUrl"`
-	Text      string      `json:"text"`
-	Rating    sqlc.Rating `json:"rating"`
-	Relevance float64     `json:"relevance"`
-	Reason    string      `json:"reason"`
+	Favorited []QuickSearchImageResponse `json:"favorited"`
+	Filtered  []QuickSearchImageResponse `json:"filtered"`
+}
+
+type MeilisearchResult struct {
+	ID int64 `json:"id"`
+}
+
+type QuickSearchImageResponse struct {
+	ID       int64       `json:"id"`
+	ImageUrl string      `json:"imageUrl"`
+	Text     string      `json:"text"`
+	Rating   sqlc.Rating `json:"rating"`
 }
 
 func QuickSearchImages(c *gin.Context) {
@@ -185,7 +194,10 @@ func QuickSearchImages(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	var result []QuickSearchResponse
+	result := QuickSearchResponse{
+		Favorited: []QuickSearchImageResponse{},
+		Filtered:  []QuickSearchImageResponse{},
+	}
 
 	userID, ok := c.Get("UserID")
 
@@ -200,32 +212,47 @@ func QuickSearchImages(c *gin.Context) {
 		}
 
 		for i := range fav {
-			result = append(result, QuickSearchResponse{
-				ID:        fav[i].ID,
-				ImageUrl:  fav[i].ImageUrl,
-				Relevance: fav[i].Relevance,
-				Reason:    "favorite",
-				Text:      fav[i].Text,
-				Rating:    fav[i].Rating,
+			result.Favorited = append(result.Favorited, QuickSearchImageResponse{
+				ID:       fav[i].ID,
+				ImageUrl: fav[i].ImageUrl,
+				Text:     fav[i].Text,
+				Rating:   fav[i].Rating,
 			})
 		}
 	}
 
-	img, err := db.Query().QuickSearchImage(ctx, payload.Keywords)
+	ms := config.MeiliSearch()
+
+	msr, err := ms.Index("images").Search(strings.Join(payload.Keywords, " "), &meilisearch.SearchRequest{
+		Limit: 16,
+	})
+
+	ids := []int64{}
+
+	for i := range msr.Hits {
+		var item MeilisearchResult
+
+		if err := msr.Hits[i].DecodeInto(&item); err != nil {
+			utils.ErrorResponse(c, 500, "Failed when fetching rows")
+			return
+		}
+
+		ids = append(ids, item.ID)
+	}
+
+	im, err := db.Query().GetImagesByIds(ctx, ids)
 
 	if err != nil {
-		utils.ErrorResponse(c, 400, "Failed when collecting image: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when fetching rows")
 		return
 	}
 
-	for i := range img {
-		result = append(result, QuickSearchResponse{
-			ID:        img[i].ID,
-			ImageUrl:  img[i].ImageUrl,
-			Relevance: img[i].Relevance,
-			Reason:    "filter",
-			Text:      img[i].Text,
-			Rating:    img[i].Rating,
+	for i := range im {
+		result.Filtered = append(result.Filtered, QuickSearchImageResponse{
+			ID:       im[i].ID,
+			ImageUrl: im[i].ImageUrl,
+			Text:     im[i].Text,
+			Rating:   im[i].Rating,
 		})
 	}
 

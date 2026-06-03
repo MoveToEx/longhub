@@ -54,13 +54,16 @@ CREATE TABLE IF NOT EXISTS "image" (
 	"image_hash" VARCHAR(255),
 	"active_deletion_id" BIGINT,
 	"current_version_id" BIGINT,
-	"embedding" VECTOR,
+	"indexed_version" BIGINT,
 	PRIMARY KEY("id")
 );
 
 
 CREATE INDEX "image_index_0"
 ON "image" ("deleted_at");
+
+CREATE INDEX "image_index_1"
+ON "image" ("indexed_version");
 
 CREATE TABLE IF NOT EXISTS "version" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,

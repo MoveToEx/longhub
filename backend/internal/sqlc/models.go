@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/pgvector/pgvector-go"
 	"long/internal/types"
 )
 
@@ -173,7 +172,7 @@ type Image struct {
 	ImageHash        pgtype.Text      `json:"imageHash"`
 	ActiveDeletionID pgtype.Int8      `json:"activeDeletionId"`
 	CurrentVersionID pgtype.Int8      `json:"currentVersionId"`
-	Embedding        pgvector.Vector  `json:"embedding"`
+	IndexedVersion   pgtype.Int8      `json:"indexedVersion"`
 }
 
 type ServerConfig struct {

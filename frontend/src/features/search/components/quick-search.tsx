@@ -3,13 +3,24 @@ import { Button } from "@base-ui/react";
 import { Bookmark, Search } from "lucide-react";
 import { useDebouncedState } from "@/shared/hooks/use-debounced-state";
 import useQuickSearch from "@/features/search/hooks/use-quick-search";
+import type { QuickSearchImage } from "@/features/search/hooks/use-quick-search";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/shared/components/ui/input-group";
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
 import { Spinner } from "@/shared/components/ui/spinner";
 
+type QuickSearchItem = QuickSearchImage & {
+  favorited: boolean;
+};
+
 export default function QuickSearch() {
   const { debouncedState, setState, instantState, isPending } = useDebouncedState('', 500);
   const { data, isLoading } = useQuickSearch(debouncedState.split(' '));
+  const results: QuickSearchItem[] = data
+    ? [
+      ...data.favorited.map(it => ({ ...it, favorited: true })),
+      ...data.filtered.map(it => ({ ...it, favorited: false })),
+    ]
+    : [];
 
   return (
     <Dialog onOpenChangeComplete={open => {
@@ -44,7 +55,7 @@ export default function QuickSearch() {
             </div>
           )}
 
-          {instantState && !isLoading && !isPending && data?.length === 0 && (
+          {instantState && !isLoading && !isPending && results.length === 0 && (
             <div className='w-full h-full flex-1 flex items-center justify-center flex-row gap-2'>
               <span className='italic text-muted-foreground'>
                 No result found
@@ -52,10 +63,10 @@ export default function QuickSearch() {
             </div>
           )}
 
-          {!isLoading && !isPending && data && data.length !== 0 && (
+          {!isLoading && !isPending && results.length !== 0 && (
             <ScrollArea className='w-full h-full'>
-              {data.map(it => (
-                <div key={it.id} className='w-full h-24 p-2 rounded-md hover:bg-gray-100 flex flex-row'>
+              {results.map(it => (
+                <div key={`${it.favorited ? 'favorited' : 'filtered'}-${it.id}`} className='w-full h-24 p-2 rounded-md hover:bg-gray-100 flex flex-row'>
                   <div className='h-full w-24'>
                     <img className='h-full w-full object-contain' src={it.imageUrl} crossOrigin="anonymous" />
                   </div>
@@ -67,14 +78,11 @@ export default function QuickSearch() {
 
                   <div className='flex-1' />
                   <div className='h-full flex flex-row items-center gap-2'>
-                    {it.reason === 'favorite' && (
+                    {it.favorited && (
                       <span className='bg-gray-100 border border-gray-250 rounded-md px-2 text-muted-foreground p-1'>
                         <Bookmark size={12} />
                       </span>
                     )}
-                    <span className='bg-gray-100 border border-gray-250 rounded-md px-2 text-muted-foreground'>
-                      {it.relevance.toFixed(2)}
-                    </span>
                   </div>
                 </div>
               ))}

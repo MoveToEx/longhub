@@ -264,51 +264,6 @@ GROUP BY i.id, i.image_url, cv.text, cv.rating
 ORDER BY relevance DESC, i.id
 LIMIT 12;
 
--- name: QuickSearchImage :many
-WITH current_version AS (
-  SELECT DISTINCT ON (image_id)
-         id AS version_id,
-         image_id,
-         text, rating
-  FROM version
-  ORDER BY image_id, version DESC
-),
-
-text_hits AS (
-  SELECT
-    cv.image_id,
-    SUM(similarity(cv.text, q.term)) AS text_score
-  FROM current_version cv,
-       unnest(@keywords::TEXT[]) AS q(term)
-  WHERE cv.text LIKE '%' || q.term || '%'
-  GROUP BY cv.image_id
-),
-
-tag_hits AS (
-  SELECT
-    cv.image_id, COUNT(*) * 0.5 AS tag_score
-  FROM current_version cv
-  JOIN version_tag vt
-    ON vt.version_id = cv.version_id
-  JOIN tag t
-    ON t.id = vt.tag_id
-  WHERE t.name = ANY (@keywords::TEXT[])
-  GROUP BY cv.image_id
-)
-
-SELECT
-  i.id, i.image_url, cv.text, cv.rating, 
-  (COALESCE(th.text_score, 0.0) + COALESCE(tg.tag_score, 0.0))::FLOAT AS relevance
-FROM image i
-JOIN current_version cv ON cv.image_id = i.id
-LEFT JOIN text_hits th ON th.image_id = i.id
-LEFT JOIN tag_hits tg ON tg.image_id = i.id
-WHERE
-  th.image_id IS NOT NULL
-  OR tg.image_id IS NOT NULL
-ORDER BY relevance DESC, i.id
-LIMIT 12;
-
 -- name: GetUserContribution :many
 WITH image_daily AS (
   SELECT
@@ -408,6 +363,55 @@ JOIN tag t ON t.id = vt.tag_id
 GROUP BY t.id
 ORDER BY count DESC
 LIMIT $2;
+
+
+-- #######################
+-- # Meilisearch indexing
+
+-- name: GetUnindexedVersions :many
+WITH candidates AS (
+    SELECT DISTINCT ON (v.image_id)
+        v.id
+    FROM image im
+    JOIN version v ON im.id = v.image_id
+    WHERE im.indexed_version IS NULL
+       OR im.indexed_version != v.id
+    ORDER BY v.image_id DESC, v.created_at DESC
+    LIMIT 8
+)
+SELECT
+    v.*,
+    sqlc.embed(im),
+    ARRAY(
+      SELECT name
+      FROM tag t
+      WHERE EXISTS (
+        SELECT 1 FROM version_tag vt
+        WHERE vt.version_id = v.id AND vt.tag_id = t.id
+      )
+    )::TEXT[] AS tags
+FROM candidates c
+JOIN version v ON v.id = c.id
+JOIN image im ON im.id = v.image_id
+FOR UPDATE OF im SKIP LOCKED;
+
+-- name: CommitUnindexedVersions :exec
+UPDATE image
+SET indexed_version = $2
+WHERE id = $1;
+
+-- name: GetImagesByIds :many
+SELECT v.text, v.rating, im.id, im.image_url, ARRAY(
+  SELECT name
+  FROM tag t
+  WHERE EXISTS (
+    SELECT 1 FROM version_tag vt
+    WHERE vt.version_id = v.id AND vt.tag_id = t.id
+  )
+)::TEXT[] AS tags FROM image im
+INNER JOIN version v ON im.current_version_id = v.id
+WHERE im.id = ANY(@ids::BIGINT[])
+ORDER BY ARRAY_POSITION(@ids::BIGINT[], im.id);
 
 -- ###################
 -- # WebAuthn

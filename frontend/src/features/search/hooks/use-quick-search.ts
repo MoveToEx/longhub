@@ -2,14 +2,16 @@ import useSWR from "swr";
 import api from "@/shared/lib/axios";
 import type { Image, Version } from "@/shared/lib/types";
 
-type SearchResponse = (Pick<Version, 'text' | 'rating'> & Pick<Image, 'id' | 'imageUrl'> & {
-  relevance: number,
-  reason: 'favorite' | 'filter'
-})[];
+export type QuickSearchImage = Pick<Version, 'text' | 'rating'> & Pick<Image, 'id' | 'imageUrl'>;
+
+type SearchResponse = {
+  favorited: QuickSearchImage[],
+  filtered: QuickSearchImage[],
+};
 
 export const fetcher = async ([url, keywords]: [string, string[]]) => {
   if (keywords.length === 0 || keywords.length === 1 && keywords[0] === '') {
-    return [];
+    return { favorited: [], filtered: [] };
   }
 
   const response = await api.post(url, {
