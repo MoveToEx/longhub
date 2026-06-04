@@ -53,7 +53,7 @@ function Image({ id, imageUrl, shortcut, date }: {
 }) {
   return (
     <HoverCard>
-      <HoverCardTrigger delay={500} closeDelay={200} render={
+      <HoverCardTrigger delay={100} closeDelay={100} render={
         <img src={imageUrl} className='w-full h-48 object-contain object-center' crossOrigin="anonymous" />
       } />
       <HoverCardContent className='flex flex-col items-center gap-4 w-72'>

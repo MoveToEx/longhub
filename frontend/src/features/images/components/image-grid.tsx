@@ -49,7 +49,7 @@ function Image({ id, imageUrl }: {
 }) {
   return (
     <HoverCard>
-      <HoverCardTrigger delay={500} closeDelay={200} render={
+      <HoverCardTrigger delay={100} closeDelay={100} render={
         <a href={`/#/image/${id}`}>
           <img src={imageUrl} className='w-full h-48 object-contain object-center' crossOrigin="anonymous" />
         </a>

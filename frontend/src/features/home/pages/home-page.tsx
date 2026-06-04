@@ -18,7 +18,7 @@ function ImageCarousal({ items }: {
               key={id}
               className='lg:basis-1/6 md:basis-1/3 basis-1/2'>
               <a href={`/#/image/${id}`}>
-                <img className='object-contain object-center' src={imageUrl} alt='Image' crossOrigin="anonymous" />
+                <img className='object-contain object-center w-48 h-32' src={imageUrl} alt='Image' crossOrigin="anonymous" />
               </a>
             </CarouselItem>
           ))}

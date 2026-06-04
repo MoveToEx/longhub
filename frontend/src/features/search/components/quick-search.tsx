@@ -1,4 +1,5 @@
 import { Dialog, DialogContent, DialogTrigger } from "@/shared/components/ui/dialog";
+import { Dialog as BaseDialog } from '@base-ui/react';
 import { Button } from "@base-ui/react";
 import { Bookmark, Search } from "lucide-react";
 import { useDebouncedState } from "@/shared/hooks/use-debounced-state";
@@ -12,6 +13,8 @@ type QuickSearchItem = QuickSearchImage & {
   favorited: boolean;
 };
 
+const handle = BaseDialog.createHandle();
+
 export default function QuickSearch() {
   const { debouncedState, setState, instantState, isPending } = useDebouncedState('', 500);
   const { data, isLoading } = useQuickSearch(debouncedState.split(' '));
@@ -23,7 +26,7 @@ export default function QuickSearch() {
     : [];
 
   return (
-    <Dialog onOpenChangeComplete={open => {
+    <Dialog handle={handle} onOpenChangeComplete={open => {
       if (open === false) {
         setState('');
       }
@@ -66,25 +69,28 @@ export default function QuickSearch() {
           {!isLoading && !isPending && results.length !== 0 && (
             <ScrollArea className='w-full h-full'>
               {results.map(it => (
-                <div key={`${it.favorited ? 'favorited' : 'filtered'}-${it.id}`} className='w-full h-24 p-2 rounded-md hover:bg-gray-100 flex flex-row'>
-                  <div className='h-full w-24'>
-                    <img className='h-full w-full object-contain' src={it.imageUrl} crossOrigin="anonymous" />
-                  </div>
-                  <div className='p-2 flex flex-col'>
-                    <span>
-                      {it.text}
-                    </span>
-                  </div>
-
-                  <div className='flex-1' />
-                  <div className='h-full flex flex-row items-center gap-2'>
-                    {it.favorited && (
-                      <span className='bg-gray-100 border border-gray-250 rounded-md px-2 text-muted-foreground p-1'>
-                        <Bookmark size={12} />
+                <a href={`/#/image/${it.id}`} onClick={() => handle.close()}>
+                  <div key={`${it.favorited ? 'favorited' : 'filtered'}-${it.id}`} className='w-full h-24 p-2 rounded-md hover:bg-gray-100 flex flex-row'>
+                    <div className='h-full shrink-0 w-24'>
+                      <img className='h-full w-24 object-contain' src={it.imageUrl} crossOrigin="anonymous" />
+                    </div>
+                    <div className='p-2 flex flex-col h-full'>
+                      <span className='text-wrap truncate text-ellipsis max-w-full'>
+                        {it.text}
                       </span>
+                    </div>
+
+                    <div className='flex-1' />
+                    {it.favorited && (
+                      <div className='h-full flex flex-row items-center gap-2'>
+                        <span className='bg-gray-100 border border-gray-250 rounded-md px-2 text-muted-foreground p-1'>
+                          <Bookmark size={12} />
+                        </span>
+                      </div>
                     )}
                   </div>
-                </div>
+                </a>
+
               ))}
             </ScrollArea>
           )}
