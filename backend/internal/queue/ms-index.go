@@ -50,6 +50,10 @@ func (w *IndexWorker) Work(ctx context.Context, job *river.Job[IndexArgs]) error
 			return err
 		}
 
+		if len(versions) == 0 {
+			return nil
+		}
+
 		doc := []IndexPayloadItem{}
 
 		for i := range versions {
