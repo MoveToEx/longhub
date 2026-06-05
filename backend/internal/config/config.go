@@ -20,6 +20,8 @@ import (
 type JWTConfig struct {
 	PrivateKey ed25519.PrivateKey
 	PublicKey  ed25519.PublicKey
+	Issuer     string
+	Audience   string
 	SessionTTL int
 }
 
@@ -118,8 +120,10 @@ func Init() {
 		MeiliSearchKey: os.Getenv("MEILISEARCH_KEY"),
 		JWT: JWTConfig{
 			PrivateKey: mustParsePrivateKey(os.Getenv("JWT_SECRET_KEY")),
-			SessionTTL: 72,
 			PublicKey:  mustParsePublicKey(os.Getenv("JWT_PUBLIC_KEY")),
+			Issuer:     os.Getenv("JWT_ISSUER"),
+			Audience:   os.Getenv("JWT_AUDIENCE"),
+			SessionTTL: 72,
 		},
 		S3: S3Config{
 			Endpoint:        os.Getenv("S3_ENDPOINT"),

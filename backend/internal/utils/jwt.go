@@ -3,23 +3,25 @@ package utils
 import (
 	"errors"
 	"long/internal/config"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type Claims struct {
-	UserID     int64
 	Permission int64
 
 	jwt.RegisteredClaims
 }
 
-func NewToken(UserId int64, Permission int64) (string, error) {
+func NewToken(userId int64, permission int64) (string, error) {
 	payload := Claims{
-		UserID:     UserId,
-		Permission: Permission,
+		Permission: permission,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   strconv.FormatInt(userId, 10),
+			Issuer:    config.GetConfig().JWT.Issuer,
+			Audience:  []string{config.GetConfig().JWT.Audience},
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(config.GetConfig().JWT.SessionTTL) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
@@ -30,18 +32,27 @@ func NewToken(UserId int64, Permission int64) (string, error) {
 	return t.SignedString(config.GetConfig().JWT.PrivateKey)
 }
 
-func ParseToken(Token string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(Token, &Claims{}, func(t *jwt.Token) (any, error) {
-		return config.GetConfig().JWT.PublicKey, nil
-	})
+func ParseToken(s string) (*Claims, error) {
+	claims := &Claims{}
+
+	token, err := jwt.ParseWithClaims(
+		s,
+		claims,
+		func(t *jwt.Token) (any, error) {
+			return config.GetConfig().JWT.PublicKey, nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}),
+		jwt.WithAudience(config.GetConfig().JWT.Audience),
+		jwt.WithIssuer(config.GetConfig().JWT.Issuer),
+	)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
-		return claims, nil
+	if !token.Valid {
+		return nil, errors.New("Invalid token")
 	}
 
-	return nil, errors.New("Invalid token")
+	return claims, nil
 }
