@@ -373,7 +373,7 @@ WITH candidates AS (
     SELECT DISTINCT ON (v.image_id)
         v.id
     FROM image im
-    JOIN version v ON im.id = v.image_id
+    JOIN version v ON im.current_version_id = v.id
     WHERE im.indexed_version IS NULL
        OR im.indexed_version != v.id
     ORDER BY v.image_id DESC, v.created_at DESC
