@@ -1,4 +1,4 @@
-import { createHashRouter } from 'react-router'
+import { createBrowserRouter } from 'react-router'
 import Layout from '@/app/layout'
 import FavoritesPage from '@/features/favorites/pages/favorites-page'
 import HomePage from '@/features/home/pages/home-page'
@@ -7,7 +7,7 @@ import ImagesPage from '@/features/images/pages/images-page'
 import SettingsPage from '@/features/settings/pages/settings-page'
 import UserPage from '@/features/user/pages/user-page'
 
-export const router = createHashRouter([
+export const router = createBrowserRouter([
   {
     path: '/',
     Component: Layout,

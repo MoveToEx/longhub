@@ -5,6 +5,7 @@ import useFavoriteTags from "@/features/favorites/hooks/use-favorite-tags";
 import useImages from "@/features/images/hooks/use-images";
 import useRandomImages from "@/features/images/hooks/use-random-images";
 import type { Image } from "@/shared/lib/types";
+import { Link } from "react-router";
 
 function ImageCarousal({ items }: {
   items: Pick<Image, 'id' | 'imageUrl'>[]
@@ -17,9 +18,9 @@ function ImageCarousal({ items }: {
             <CarouselItem
               key={id}
               className='lg:basis-1/6 md:basis-1/3 basis-1/2'>
-              <a href={`/#/image/${id}`}>
+              <Link to={`/image/${id}`}>
                 <img className='object-contain object-center w-48 h-32' src={imageUrl} alt='Image' crossOrigin="anonymous" />
-              </a>
+              </Link>
             </CarouselItem>
           ))}
         </CarouselContent>

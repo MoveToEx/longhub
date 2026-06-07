@@ -8,6 +8,7 @@ import type { QuickSearchImage } from "@/features/search/hooks/use-quick-search"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/shared/components/ui/input-group";
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
 import { Spinner } from "@/shared/components/ui/spinner";
+import { Link } from "react-router";
 
 type QuickSearchItem = QuickSearchImage & {
   favorited: boolean;
@@ -69,8 +70,11 @@ export default function QuickSearch() {
           {!isLoading && !isPending && results.length !== 0 && (
             <ScrollArea className='w-full h-full'>
               {results.map(it => (
-                <a href={`/#/image/${it.id}`} onClick={() => handle.close()}>
-                  <div key={`${it.favorited ? 'favorited' : 'filtered'}-${it.id}`} className='w-full h-24 p-2 rounded-md hover:bg-gray-100 flex flex-row'>
+                <Link
+                  key={`${it.favorited ? 'favorited' : 'filtered'}-${it.id}`}
+                  to={`/image/${it.id}`}
+                  onClick={() => handle.close()}>
+                  <div className='w-full h-24 p-2 rounded-md hover:bg-gray-100 flex flex-row'>
                     <div className='h-full shrink-0 w-24'>
                       <img className='h-full w-24 object-contain' src={it.imageUrl} crossOrigin="anonymous" />
                     </div>
@@ -89,7 +93,7 @@ export default function QuickSearch() {
                       </div>
                     )}
                   </div>
-                </a>
+                </Link>
 
               ))}
             </ScrollArea>

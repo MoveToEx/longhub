@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { copyImage } from "@/shared/lib/utils";
 import type { Image } from "@/shared/lib/types";
 import LikeButton from "./like-button";
+import { Link } from "react-router";
 
 type GridItem = Pick<Image, 'id' | 'imageUrl'>;
 
@@ -50,9 +51,9 @@ function Image({ id, imageUrl }: {
   return (
     <HoverCard>
       <HoverCardTrigger delay={100} closeDelay={100} render={
-        <a href={`/#/image/${id}`}>
+        <Link to={`/image/${id}`}>
           <img src={imageUrl} className='w-full h-48 object-contain object-center' crossOrigin="anonymous" />
-        </a>
+        </Link>
       } />
       <HoverCardContent className='flex flex-row justify-evenly'>
         <LikeButton id={id} />

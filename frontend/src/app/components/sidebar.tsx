@@ -5,28 +5,28 @@ import useAuth from "@/features/auth/hooks/use-auth";
 import { Spinner } from "@/shared/components/ui/spinner";
 import { Dialog as BaseDialog } from '@base-ui/react';
 import LoginDialog from "@/features/auth/components/login-dialog";
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { type FC } from "react";
 
 const items = [
   {
     title: "Home",
-    url: "/#/",
+    url: "/",
     icon: Home,
   },
   {
     title: "Browse",
-    url: '/#/image',
+    url: '/image',
     icon: SquareMousePointer,
   },
   // {
   //   title: "Search",
-  //   url: "/#/search",
+  //   url: "/search",
   //   icon: Search,
   // },
   {
     title: "Favorite",
-    url: "/#/favorite",
+    url: "/favorite",
     icon: Bookmark
   },
   {
@@ -108,23 +108,27 @@ function SidebarItem({ url, title, Icon }: {
   title: string,
   Icon: FC
 }) {
-  useLocation();
-
-  const target = new URL(url, `${window.location.protocol}//${window.location.host}`);
-  const sameOrigin = window.location.host === target.host;
+  const { pathname } = useLocation();
+  const isExternal = /^https?:\/\//.test(url);
+  const isActive = !isExternal && (pathname === url || url !== '/' && pathname.startsWith(`${url}/`));
 
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        className={sameOrigin && window.location.hash === target.hash ? 'bg-accent' : ''}
+        isActive={isActive}
         render={
-          <a
-            href={url}
-            target={sameOrigin ? '_self' : '_blank'}>
-            <Icon />
-            <span>{title}</span>
-            {!sameOrigin && <ExternalLink className='text-muted-foreground max-w-3 max-h-3' />}
-          </a>
+          isExternal ? (
+            <a href={url} target='_blank' rel='noreferrer'>
+              <Icon />
+              <span>{title}</span>
+              <ExternalLink className='text-muted-foreground max-w-3 max-h-3' />
+            </a>
+          ) : (
+            <Link to={url}>
+              <Icon />
+              <span>{title}</span>
+            </Link>
+          )
         } />
     </SidebarMenuItem>
   )
