@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -10,7 +11,7 @@ import (
 	"net/http"
 
 	"github.com/corona10/goimagehash"
-	"github.com/riverqueue/river"
+	"github.com/hibiken/asynq"
 	_ "golang.org/x/image/webp"
 )
 
@@ -18,16 +19,21 @@ type HashArgs struct {
 	ID int64 `json:"id"`
 }
 
-func (HashArgs) Kind() string {
-	return "hash"
+func NewHashTask(id int64) (*asynq.Task, error) {
+	payload, err := json.Marshal(HashArgs{ID: id})
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeHash, payload), nil
 }
 
-type HashWorker struct {
-	river.WorkerDefaults[HashArgs]
-}
+func HandleHashTask(ctx context.Context, task *asynq.Task) error {
+	var args HashArgs
+	if err := json.Unmarshal(task.Payload(), &args); err != nil {
+		return err
+	}
 
-func (w *HashWorker) Work(ctx context.Context, job *river.Job[HashArgs]) error {
-	img, err := db.Query().GetImage(ctx, job.Args.ID)
+	img, err := db.Query().GetImage(ctx, args.ID)
 	if err != nil {
 		return err
 	}

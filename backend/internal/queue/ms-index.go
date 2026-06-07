@@ -6,19 +6,13 @@ import (
 	"long/internal/db"
 	"long/internal/sqlc"
 
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/meilisearch/meilisearch-go"
-	"github.com/riverqueue/river"
 )
 
-type IndexArgs struct{}
-
-func (IndexArgs) Kind() string {
-	return "ms-index"
-}
-
-type IndexWorker struct {
-	river.WorkerDefaults[IndexArgs]
+func NewIndexTask() *asynq.Task {
+	return asynq.NewTask(TypeIndex, nil)
 }
 
 type IndexPayloadItem struct {
@@ -40,7 +34,7 @@ func toInt(r sqlc.Rating) int {
 	return -1
 }
 
-func (w *IndexWorker) Work(ctx context.Context, job *river.Job[IndexArgs]) error {
+func HandleIndexTask(ctx context.Context, _ *asynq.Task) error {
 	ms := config.MeiliSearch()
 
 	err := db.Transaction(ctx, func(tx *sqlc.Queries) error {

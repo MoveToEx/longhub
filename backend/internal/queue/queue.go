@@ -4,61 +4,75 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"long/internal/config"
+
+	"github.com/hibiken/asynq"
 )
 
-var client *river.Client[pgx.Tx]
-var ctx context.Context
+const (
+	TypeHash  = "hash"
+	TypeIndex = "ms-index"
+)
 
-func Init(conn *pgxpool.Pool) error {
-	workers := river.NewWorkers()
+var (
+	client    *asynq.Client
+	server    *asynq.Server
+	scheduler *asynq.Scheduler
+)
 
-	if err := river.AddWorkerSafely(workers, &HashWorker{}); err != nil {
-		return err
-	}
-	if err := river.AddWorkerSafely(workers, &IndexWorker{}); err != nil {
-		return err
-	}
+func redisOpt() asynq.RedisConnOpt {
+	return asynq.RedisClientOpt{Addr: config.GetConfig().ValkeyAddr}
+}
 
-	var err error
-
-	client, err = river.NewClient(riverpgxv5.New(conn), &river.Config{
-		Queues: map[string]river.QueueConfig{
-			river.QueueDefault: {
-				MaxWorkers: 100,
-			},
-		},
-		Workers: workers,
-		PeriodicJobs: []*river.PeriodicJob{
-			river.NewPeriodicJob(
-				river.PeriodicInterval(3*time.Second),
-				func() (river.JobArgs, *river.InsertOpts) {
-					return IndexArgs{}, nil
-				},
-				&river.PeriodicJobOpts{
-					ID:         "ms-index",
-					RunOnStart: true,
-				},
-			),
-		},
+func Init() error {
+	opt := redisOpt()
+	client = asynq.NewClient(opt)
+	server = asynq.NewServer(opt, asynq.Config{
+		Concurrency: 100,
+	})
+	scheduler = asynq.NewScheduler(opt, &asynq.SchedulerOpts{
+		Location: time.Local,
 	})
 
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(TypeHash, HandleHashTask)
+	mux.HandleFunc(TypeIndex, HandleIndexTask)
+
+	if err := server.Start(mux); err != nil {
+		_ = client.Close()
+		return err
+	}
+
+	if _, err := scheduler.Register("@every 3s", NewIndexTask()); err != nil {
+		shutdown()
+		return err
+	}
+
+	if err := scheduler.Start(); err != nil {
+		shutdown()
+		return err
+	}
+
+	_, err := client.EnqueueContext(context.Background(), NewIndexTask())
 	if err != nil {
-		return err
+		shutdown()
 	}
+	return err
+}
 
-	ctx = context.Background()
-
-	if err := client.Start(ctx); err != nil {
-		return err
+func shutdown() error {
+	if scheduler != nil {
+		scheduler.Shutdown()
 	}
-
+	if server != nil {
+		server.Shutdown()
+	}
+	if client != nil {
+		return client.Close()
+	}
 	return nil
 }
 
 func Stop() error {
-	return client.Stop(ctx)
+	return shutdown()
 }

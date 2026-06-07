@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"embed"
 
-	_ "long/internal/db/migrations"
 	"long/internal/sqlc"
 
 	"github.com/jackc/pgx/v5/pgxpool"

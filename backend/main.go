@@ -41,7 +41,11 @@ func main() {
 	}
 
 	db.Init(ctx, conn)
-	queue.Init(conn)
+
+	if err := queue.Init(); err != nil {
+		log.Fatalln("Failed when starting queue: ", err)
+		return
+	}
 
 	app := gin.New()
 
