@@ -7,12 +7,17 @@ type UserImagesResponse = {
   images: (Pick<Version, 'text' | 'rating'> & Pick<Image, 'id' | 'imageUrl' | 'currentVersionId'>)[]
 }
 
-export default function useUserImages(userId: number) {
-  return useTaggedSWR<[number], UserImagesResponse>({
+export default function useUserImages(userId: number, offset: number = 0, limit: number = 24) {
+  return useTaggedSWR<[number, number, number], UserImagesResponse>({
     id: 'user-images',
-    args: [userId],
-    fetcher: async (userId) => {
-      const response = await api.get(`/user/${userId}/image`);
+    args: [userId, offset, limit],
+    fetcher: async (userId, offset, limit) => {
+      const response = await api.get(`/user/${userId}/image`, {
+        params: {
+          offset: offset.toString(),
+          limit: limit.toString(),
+        },
+      });
       return response.data.data;
     },
     tags: ['user', 'image'],

@@ -7,7 +7,7 @@ export default function UserHeader({ id }: {
 }) {
   const { data, isLoading } = useUser(id);
   return (
-    <div className='w-full h-full'>
+    <div className='w-full'>
       {isLoading && (
         <Spinner />
       )}

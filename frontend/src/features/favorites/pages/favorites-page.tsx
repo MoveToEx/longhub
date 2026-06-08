@@ -1,6 +1,6 @@
 import { Button } from "@/shared/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/shared/components/ui/hover-card";
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/shared/components/ui/pagination";
+import { Pagination } from "@/shared/components/ui/pagination";
 import { Spinner } from "@/shared/components/ui/spinner";
 import useFavorites from "@/features/favorites/hooks/use-favorites"
 import { copyImage } from "@/shared/lib/utils";
@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { RequiresLogin } from "@/shared/components/utils";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/shared/components/ui/empty";
 import LikeButton from "@/features/images/components/like-button";
+
+const PAGE_SIZE = 24;
 
 function CopyButton({
   url
@@ -82,8 +84,8 @@ export default function FavoritesPage() {
   const [searchParams, setSearchParams] = useSearchParams({
     p: "1"
   });
-  const page = useMemo(() => Number(searchParams.get('p') ?? 1), [searchParams]);
-  const { data, isLoading } = useFavorites();
+  const page = useMemo(() => Math.max(1, Number(searchParams.get('p') ?? 1) || 1), [searchParams]);
+  const { data, isLoading } = useFavorites((page - 1) * PAGE_SIZE, PAGE_SIZE);
 
   return (
     <div className='w-full h-full'>
@@ -125,47 +127,12 @@ export default function FavoritesPage() {
       </div>
 
       {!!data?.total && (
-        <Pagination className='mt-4 mb-2'>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                onClick={() => {
-                  if (page === 1) return;
-
-                  setSearchParams({
-                    p: (page - 1).toString()
-                  });
-                }} />
-            </PaginationItem>
-
-            {page > 2 && (
-              <PaginationItem>
-                <PaginationLink onClick={() => {
-                  setSearchParams({
-                    p: (page - 1).toString()
-                  })
-                }}>{page - 1}</PaginationLink>
-              </PaginationItem>
-            )}
-
-            <PaginationItem>
-              <PaginationLink isActive>{page}</PaginationLink>
-            </PaginationItem>
-
-            <PaginationItem>
-              <PaginationNext
-                onClick={() => {
-                  if (page * 48 >= (data?.total ?? 0)) {
-                    return;
-                  }
-
-                  setSearchParams({
-                    p: String(page + 1)
-                  })
-                }} />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+        <Pagination
+          className='mt-4 mb-2'
+          count={Math.ceil(data.total / PAGE_SIZE)}
+          page={page}
+          onChange={(_, page) => setSearchParams({ p: page.toString() })}
+        />
       )}
 
     </div>
