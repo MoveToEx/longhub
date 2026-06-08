@@ -12,13 +12,13 @@ export default function Layout() {
   return (
     <ThemeProvider defaultTheme='light' storageKey='vite-ui-theme'>
       <SidebarProvider>
-        <div className='h-screen w-screen flex flex-row'>
+        <div className='h-dvh w-full overflow-hidden flex flex-row'>
           <Toaster position='top-center' />
           <EditShortcutDialog />
           <AppSidebar />
-          <div className='w-full h-screen flex flex-col'>
+          <div className='min-w-0 min-h-0 flex-1 h-dvh overflow-hidden flex flex-col'>
             <AppTopBar />
-            <ScrollArea className='flex-1 w-full overflow-auto'>
+            <ScrollArea className='min-h-0 flex-1 w-full overflow-hidden'>
               <div className='w-full px-2 lg:px-16 md:px-8 py-4 md:py-6 lg:py-8'>
                 <Outlet />
               </div>
