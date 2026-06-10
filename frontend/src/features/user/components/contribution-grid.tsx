@@ -34,7 +34,7 @@ export default function ContributionGrid({
   }, []);
 
   const maximum = useMemo(() => {
-    if (!data) return 1;
+    if (!data || !data.length) return 1;
 
     return data.map(it => it.imageCount + it.versionCount).reduce((prev, cur) => prev > cur ? prev : cur);
   }, [data]);
