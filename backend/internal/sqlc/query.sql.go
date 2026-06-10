@@ -9,7 +9,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/pgvector/pgvector-go"
 	"long/internal/types"
 )
 
@@ -1585,20 +1584,6 @@ type SetFavoriteShortcutParams struct {
 
 func (q *Queries) SetFavoriteShortcut(ctx context.Context, arg SetFavoriteShortcutParams) error {
 	_, err := q.db.Exec(ctx, setFavoriteShortcut, arg.UserID, arg.ImageID, arg.Shortcut)
-	return err
-}
-
-const setImageEmbedding = `-- name: SetImageEmbedding :exec
-UPDATE image SET embedding = $2::vector WHERE id = $1
-`
-
-type SetImageEmbeddingParams struct {
-	ID      int64           `json:"id"`
-	Column2 pgvector.Vector `json:"column2"`
-}
-
-func (q *Queries) SetImageEmbedding(ctx context.Context, arg SetImageEmbeddingParams) error {
-	_, err := q.db.Exec(ctx, setImageEmbedding, arg.ID, arg.Column2)
 	return err
 }
 

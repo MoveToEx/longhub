@@ -32,9 +32,6 @@ LIMIT $1 OFFSET $2;
 SELECT COUNT(*) FROM public.image
 WHERE deleted_at IS NULL;
 
--- name: SetImageEmbedding :exec
-UPDATE image SET embedding = $2::vector WHERE id = $1;
-
 -- name: SetImageHash :exec
 UPDATE image SET "image_hash" = $2 WHERE "id" = $1;
 

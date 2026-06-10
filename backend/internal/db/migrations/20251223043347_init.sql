@@ -1,7 +1,6 @@
 -- +goose Up
 SELECT 'up SQL query';
 
-CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -53,7 +52,6 @@ CREATE TABLE IF NOT EXISTS "image" (
 	"image_hash" VARCHAR(255),
 	"active_deletion_id" BIGINT,
 	"current_version_id" BIGINT,
-	"embedding" VECTOR,
 	PRIMARY KEY("id")
 );
 
@@ -259,7 +257,6 @@ DROP TYPE IF EXISTS rating;
 DROP TYPE IF EXISTS upload_status;
 DROP TYPE IF EXISTS deletion_status;
 
-DROP EXTENSION IF EXISTS vector;
 DROP EXTENSION IF EXISTS pg_trgm;
 DROP EXTENSION IF EXISTS pgcrypto;
 
