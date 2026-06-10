@@ -1661,22 +1661,6 @@ func (q *Queries) SetUserPermission(ctx context.Context, arg SetUserPermissionPa
 	return err
 }
 
-const setUserPreference = `-- name: SetUserPreference :exec
-UPDATE public.user
-SET "preference" = $2
-WHERE "id" = $1
-`
-
-type SetUserPreferenceParams struct {
-	ID         int64            `json:"id"`
-	Preference types.Preference `json:"preference"`
-}
-
-func (q *Queries) SetUserPreference(ctx context.Context, arg SetUserPreferenceParams) error {
-	_, err := q.db.Exec(ctx, setUserPreference, arg.ID, arg.Preference)
-	return err
-}
-
 const setVersionRating = `-- name: SetVersionRating :exec
 UPDATE version SET "rating" = $2 WHERE "id" = $1
 `

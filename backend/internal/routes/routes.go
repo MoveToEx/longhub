@@ -29,7 +29,6 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.POST("/image/ack", handlers.AcknowledgeSession)
 		protected.PATCH("/image/:id", handlers.UpdateImage)
 		protected.GET("/user", handlers.GetSelf)
-		protected.PATCH("/user/preferences", handlers.UpdatePreference)
 
 		// Favorite
 		protected.GET("/favorite", handlers.GetFavorites)

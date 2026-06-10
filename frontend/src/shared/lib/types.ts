@@ -28,10 +28,7 @@ export type Version = {
   userId: number;
 }
 
-export type Preferences = {
-  hideNSFW?: boolean,
-  hideViolent?: boolean,
-}
+export type Preferences = Record<string, unknown>
 
 export type UserIdentifier = {
   id: number,

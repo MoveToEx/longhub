@@ -173,11 +173,6 @@ UPDATE public.upload_session
 SET "status" = 'expired'
 WHERE "id" = $1;
 
--- name: SetUserPreference :exec
-UPDATE public.user
-SET "preference" = $2
-WHERE "id" = $1;
-
 -- name: FilterImages :many
 WITH current_version AS (
   SELECT DISTINCT ON (image_id)

@@ -1,5 +1,10 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import mime from 'mime';
+import {
+  PREFERENCE_STORAGE_KEY,
+  schema,
+} from "@/shared/hooks/use-preference";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -33,7 +38,7 @@ async function toBlob(element: HTMLImageElement) {
   return blob;
 }
 
-async function fetchBlob(src: string) {
+async function fetchPNG(src: string) {
   const response = await fetch(src, {
     cache: 'no-store'
   });
@@ -67,14 +72,40 @@ async function fetchBlob(src: string) {
   return toBlob(image);
 }
 
+async function fetchHtml(src: string) {
+  const response = await fetch(src);
+
+  const data = await response.bytes();
+
+  const b64 = data.toBase64();
+
+  const type = mime.getType(src);
+  if (!type || !type.startsWith('image')) return '';
+
+  return `<img src="data:${type};base64,${b64}" />`;
+}
+
+export function getPreference() {
+  const stored = localStorage.getItem(PREFERENCE_STORAGE_KEY);
+  if (!stored) return schema.parse({});
+
+  return schema.parse(JSON.parse(stored));
+}
+
 export async function copyImage(
-  src: string
+  src: string,
+  mode = getPreference().copyMode
 ) {
-  await navigator.clipboard.write([
-    new ClipboardItem({
-      'image/png': fetchBlob(src)
-    })
-  ]);
+  const result: Record<string, Promise<string | Blob>> = {};
+
+  if (mode === 'png' || mode === 'combined') {
+    result['image/png'] = fetchPNG(src);
+  }
+  if (mode === 'html' || mode === 'combined') {
+    result['text/html'] = fetchHtml(src);
+  }
+
+  await navigator.clipboard.write([ new ClipboardItem(result) ]);
 }
 
 

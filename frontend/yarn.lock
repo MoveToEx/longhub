@@ -2307,6 +2307,7 @@ __metadata:
     globals: "npm:^16.5.0"
     lodash: "npm:^4.17.23"
     lucide-react: "npm:^0.562.0"
+    mime: "npm:^4.1.0"
     next-themes: "npm:^0.4.6"
     oxc: "npm:^1.0.1"
     oxfmt: "npm:^0.26.0"
@@ -2926,6 +2927,15 @@ __metadata:
   dependencies:
     mime-db: "npm:1.52.0"
   checksum: 10c0/82fb07ec56d8ff1fc999a84f2f217aa46cb6ed1033fefaabd5785b9a974ed225c90dc72fff460259e66b95b73648596dbcc50d51ed69cdf464af2d237d3149b2
+  languageName: node
+  linkType: hard
+
+"mime@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "mime@npm:4.1.0"
+  bin:
+    mime: bin/cli.js
+  checksum: 10c0/3b8602e50dff1049aea8bb2d4c65afc55bf7f3eb5c17fd2bcb315b8c8ae225a7553297d424d3621757c24cdba99e930ecdc4108467009cdc7ed55614cd55031d
   languageName: node
   linkType: hard
 

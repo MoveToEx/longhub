@@ -3,7 +3,6 @@ package handlers
 import (
 	"long/internal/db"
 	"long/internal/sqlc"
-	"long/internal/types"
 	"long/internal/utils"
 	"strconv"
 
@@ -123,46 +122,6 @@ func ListImagesByUser(c *gin.Context) {
 		Total:  total,
 		Images: img,
 	})
-}
-
-func UpdatePreference(c *gin.Context) {
-	userID, ok := c.Get("UserID")
-
-	if !ok {
-		utils.ErrorResponse(c, 500, "Unexpected error")
-		return
-	}
-
-	var payload types.Preference
-
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		utils.ErrorResponse(c, 400, "Invalid request body")
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	result := types.Preference{
-		HideNSFW:    new(false),
-		HideViolent: new(false),
-	}
-
-	if payload.HideNSFW != nil {
-		result.HideNSFW = payload.HideNSFW
-	}
-
-	if payload.HideViolent != nil {
-		result.HideViolent = payload.HideViolent
-	}
-
-	if err := db.Query().SetUserPreference(ctx, sqlc.SetUserPreferenceParams{
-		ID:         userID.(int64),
-		Preference: result,
-	}); err != nil {
-		utils.ErrorResponse(c, 500, "Failed when updating preference")
-	}
-
-	utils.SuccessResponse(c, nil)
 }
 
 type UpdatePasswordPayload struct {
