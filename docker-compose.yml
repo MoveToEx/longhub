@@ -1,6 +1,6 @@
 services:
   pg:
-    image: pgvector/pgvector:0.8.1-pg18-trixie
+    image: postgres:18.4-alpine3.23
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
@@ -26,7 +26,7 @@ services:
     environment:
       - MEILI_MASTER_KEY=MASTER_KEY
     healthcheck:
-      test: ["curl", "http://localhost:7700/health"]
+      test: ["CMD-SHELL", "curl", "http://localhost:7700/health"]
       interval: 5s
       timeout: 30s
       retries: 5
