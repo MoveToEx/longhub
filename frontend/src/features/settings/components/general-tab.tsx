@@ -7,13 +7,17 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select";
 import usePreference from "@/shared/hooks/use-preference";
-import { BracesIcon, CodeIcon, ImageIcon } from "lucide-react";
+import { CodeIcon, ImageIcon, Split } from "lucide-react";
 import { useMemo } from "react";
 
 function CopyMode() {
   const [preference, setPreference] = usePreference();
 
   const items = useMemo(() => [
+    {
+      label: <span className='flex flex-row items-center gap-2'><Split className='inline' /> Auto</span>,
+      value: 'auto'
+    },
     {
       label: <span className='flex flex-row items-center gap-2'><ImageIcon className='inline' /> PNG</span>,
       value: 'png'
@@ -22,10 +26,6 @@ function CopyMode() {
       label: <span className='flex flex-row items-center gap-2'><CodeIcon className='inline' /> HTML</span>,
       value: 'html'
     },
-    {
-      label: <span className='flex flex-row items-center gap-2'><BracesIcon className='inline' /> PNG + HTML</span>,
-      value: 'combined'
-    }
   ], []);
 
   return (
@@ -54,7 +54,12 @@ function CopyMode() {
         </SelectContent>
       </Select>
       <FieldDescription>
-        PNG is recommended in most cases, but HTML <b>may</b> allow you to copy GIF into other apps.
+        <p>
+          PNG is recommended in most cases, but HTML <b>may</b> allow you to copy GIF into other apps.
+        </p>
+        <p>
+          Auto mode uses HTML only for GIF and PNG for other formats.
+        </p>
       </FieldDescription>
     </Field>
   )
@@ -64,7 +69,7 @@ export default function GeneralTab() {
 
   return (
     <div className='w-full flex flex-col gap-2 items-center'>
-      <div className='w-full md:w-1/2'>
+      <div className='w-full md:w-3/4'>
         <span className='text-lg'>Copying</span>
 
         <FieldGroup className='mt-4'>

@@ -92,16 +92,30 @@ export function getPreference() {
   return schema.parse(JSON.parse(stored));
 }
 
+function extension(s: string) {
+  try {
+    const url = new URL(s);
+    const pathname = url.pathname;
+    if (!pathname.includes('.')) return '';
+
+    const ext = pathname.substring(pathname.lastIndexOf('.') + 1);
+    return ext;
+  }
+  catch {
+    return '';
+  }
+}
+
 export async function copyImage(
   src: string,
   mode = getPreference().copyMode
 ) {
   const result: Record<string, Promise<string | Blob>> = {};
 
-  if (mode === 'png' || mode === 'combined') {
+  if (mode === 'png' || mode === 'auto' && extension(src) !== 'gif') {
     result['image/png'] = fetchPNG(src);
   }
-  if (mode === 'html' || mode === 'combined') {
+  if (mode === 'html' || mode === 'auto' && extension(src) === 'gif') {
     result['text/html'] = fetchHtml(src);
   }
 

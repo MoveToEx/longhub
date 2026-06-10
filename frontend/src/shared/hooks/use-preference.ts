@@ -3,7 +3,7 @@ import { useLocalStorage } from "usehooks-ts";
 import { z } from "zod";
 
 export const schema = z.object({
-  copyMode: z.enum(['html', 'png', 'combined']).default('png'),
+  copyMode: z.enum(['html', 'png', 'auto']).default('png'),
 });
 
 export type Preference = z.infer<typeof schema>

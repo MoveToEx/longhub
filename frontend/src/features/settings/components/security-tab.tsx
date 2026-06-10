@@ -185,7 +185,7 @@ function PasskeySection() {
 export default function SecurityTab() {
   return (
     <div className='w-full flex flex-col items-center'>
-      <div className='w-full md:w-1/2 flex flex-col'>
+      <div className='w-full md:w-3/4 flex flex-col'>
         <PasskeySection />
 
       </div>
