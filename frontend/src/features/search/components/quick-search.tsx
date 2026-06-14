@@ -53,7 +53,7 @@ export default function QuickSearch() {
         </InputGroup>
 
         <div className='h-96 flex flex-col'>
-          {isLoading || isPending && (
+          {(isLoading || isPending) && (
             <div className='w-full h-full flex-1 flex items-center justify-center flex-row gap-2'>
               <Spinner className='text-gray-600' /> Loading
             </div>
