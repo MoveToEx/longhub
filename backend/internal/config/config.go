@@ -4,9 +4,13 @@ import (
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -176,6 +180,40 @@ func InitClients() error {
 	}
 
 	msClient = meilisearch.New(config.MeiliSearchURL, meilisearch.WithAPIKey(config.MeiliSearchKey))
+	if err := ensureMeiliIndex(msClient, "images", "id"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ensureMeiliIndex(client meilisearch.ServiceManager, uid string, primaryKey string) error {
+	_, err := client.GetIndex(uid)
+	if err == nil {
+		return nil
+	}
+
+	var meiliErr *meilisearch.Error
+	if !errors.As(err, &meiliErr) || meiliErr.StatusCode != http.StatusNotFound {
+		return err
+	}
+
+	task, err := client.CreateIndex(&meilisearch.IndexConfig{
+		Uid:        uid,
+		PrimaryKey: primaryKey,
+	})
+	if err != nil {
+		return err
+	}
+
+	result, err := client.WaitForTask(task.TaskUID, 50*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	if result.Status != meilisearch.TaskStatusSucceeded {
+		return fmt.Errorf("meilisearch index %q creation finished with status %q: %s", uid, result.Status, result.Error.Message)
+	}
+
 	return nil
 }
 
