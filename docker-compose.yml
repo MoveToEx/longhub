@@ -25,6 +25,8 @@ services:
     image: getmeili/meilisearch:v1.45.2
     environment:
       - MEILI_MASTER_KEY=MASTER_KEY
+    volumes:
+      - msdata:/meili_data
     healthcheck:
       test: ["CMD-SHELL", "curl", "http://localhost:7700/health"]
       interval: 5s
@@ -61,3 +63,4 @@ services:
 
 volumes:
   pgdata:
+  msdata:
