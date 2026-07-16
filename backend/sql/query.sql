@@ -172,45 +172,6 @@ UPDATE public.upload_session
 SET "status" = 'expired'
 WHERE "id" = $1;
 
--- name: FilterImages :many
-WITH current_version AS (
-  SELECT DISTINCT ON (image_id)
-  id AS version_id, image_id, text, rating
-  FROM public.version
-  ORDER BY image_id, version_id DESC
-),
-include_tag_ids AS (
-  SELECT id
-  FROM tag
-  WHERE tag.name = ANY (@include_tags::TEXT[])
-),
-exclude_tag_ids AS (
-  SELECT id
-  FROM tag
-  WHERE tag.name = ANY (@exclude_tags::TEXT[])
-)
-SELECT i.id, i.image_url, i.image_key, i.created_at, cv.text, cv.rating, i.user_id, i.deleted_at
-FROM image i
-JOIN current_version cv ON cv.image_id = i.id
-
--- INCLUDE: must contain ALL include tags
-JOIN version_tag vt_in
-  ON vt_in.version_id = cv.version_id
-JOIN include_tag_ids it
-  ON it.id = vt_in.tag_id
-  
--- EXCLUDE: must contain NONE of exclude tags
-LEFT JOIN version_tag vt_ex
-  ON vt_ex.version_id = cv.version_id
- AND vt_ex.tag_id IN (SELECT id FROM exclude_tag_ids)
-WHERE cv.text LIKE CONCAT('%', @text, '%')
-GROUP BY i.id, cv.version_id
-HAVING
-  COUNT(DISTINCT it.id) = (SELECT COUNT(*) FROM include_tag_ids)
-  AND COUNT(vt_ex.tag_id) = 0
-LIMIT $1
-OFFSET $2;
-
 -- name: GetRandomImage :many
 WITH current_version AS (
   SELECT DISTINCT ON (image_id)
@@ -376,6 +337,7 @@ WITH candidates AS (
 SELECT
     v.*,
     sqlc.embed(im),
+    ui.username AS uploader,
     ARRAY(
       SELECT name
       FROM tag t
@@ -387,6 +349,7 @@ SELECT
 FROM candidates c
 JOIN version v ON v.id = c.id
 JOIN image im ON im.id = v.image_id
+JOIN user_identifier ui ON ui.id = im.user_id
 FOR UPDATE OF im SKIP LOCKED;
 
 -- name: CommitUnindexedVersions :exec
@@ -405,6 +368,7 @@ SELECT v.text, v.rating, im.id, im.image_url, ARRAY(
 )::TEXT[] AS tags FROM image im
 INNER JOIN version v ON im.current_version_id = v.id
 WHERE im.id = ANY(@ids::BIGINT[])
+  AND im.deleted_at IS NULL
 ORDER BY ARRAY_POSITION(@ids::BIGINT[], im.id);
 
 -- ###################

@@ -16,10 +16,13 @@ func NewIndexTask() *asynq.Task {
 }
 
 type IndexPayloadItem struct {
-	ID     int64    `json:"id"`
-	Text   string   `json:"text"`
-	Tags   []string `json:"tags"`
-	Rating int      `json:"rating"`
+	ID        int64    `json:"id"`
+	Text      string   `json:"text"`
+	Tags      []string `json:"tags"`
+	Rating    int      `json:"rating"`
+	UserID    int64    `json:"userId"`
+	Uploader  string   `json:"uploader"`
+	CreatedAt int64    `json:"createdAt"`
 }
 
 func toInt(r sqlc.Rating) int {
@@ -52,10 +55,13 @@ func HandleIndexTask(ctx context.Context, _ *asynq.Task) error {
 
 		for i := range versions {
 			doc = append(doc, IndexPayloadItem{
-				ID:     versions[i].ImageID,
-				Text:   versions[i].Text,
-				Tags:   versions[i].Tags,
-				Rating: toInt(versions[i].Rating),
+				ID:        versions[i].ImageID,
+				Text:      versions[i].Text,
+				Tags:      versions[i].Tags,
+				Rating:    toInt(versions[i].Rating),
+				UserID:    versions[i].Image.UserID,
+				Uploader:  versions[i].Uploader,
+				CreatedAt: versions[i].Image.CreatedAt.Time.Unix(),
 			})
 		}
 

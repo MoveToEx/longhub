@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -188,32 +189,73 @@ func InitClients() error {
 }
 
 func ensureMeiliIndex(client meilisearch.ServiceManager, uid string, primaryKey string) error {
-	_, err := client.GetIndex(uid)
-	if err == nil {
-		return nil
-	}
+	_, err := client.ExperimentalFeatures().SetContainsFilter(true).Update()
 
-	var meiliErr *meilisearch.Error
-	if !errors.As(err, &meiliErr) || meiliErr.StatusCode != http.StatusNotFound {
-		return err
-	}
-
-	task, err := client.CreateIndex(&meilisearch.IndexConfig{
-		Uid:        uid,
-		PrimaryKey: primaryKey,
-	})
 	if err != nil {
 		return err
 	}
 
-	result, err := client.WaitForTask(task.TaskUID, 50*time.Millisecond)
+	_, err = client.GetIndex(uid)
+	if err != nil {
+		var meiliErr *meilisearch.Error
+		if !errors.As(err, &meiliErr) || meiliErr.StatusCode != http.StatusNotFound {
+			return err
+		}
+
+		task, err := client.CreateIndex(&meilisearch.IndexConfig{
+			Uid:        uid,
+			PrimaryKey: primaryKey,
+		})
+		if err != nil {
+			return err
+		}
+		if err := waitForMeiliTask(client, task.TaskUID, fmt.Sprintf("meilisearch index %q creation", uid)); err != nil {
+			return err
+		}
+	}
+
+	index := client.Index(uid)
+	filterable := []interface{}{"tags", "rating", "text", "userId", "uploader"}
+	currentFilterable, err := index.GetFilterableAttributes()
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(*currentFilterable, filterable) {
+		task, err := index.UpdateFilterableAttributes(&filterable)
+		if err != nil {
+			return err
+		}
+		if err := waitForMeiliTask(client, task.TaskUID, fmt.Sprintf("meilisearch index %q filter settings update", uid)); err != nil {
+			return err
+		}
+	}
+
+	sortable := []string{"id", "createdAt"}
+	currentSortable, err := index.GetSortableAttributes()
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(*currentSortable, sortable) {
+		task, err := index.UpdateSortableAttributes(&sortable)
+		if err != nil {
+			return err
+		}
+		if err := waitForMeiliTask(client, task.TaskUID, fmt.Sprintf("meilisearch index %q sort settings update", uid)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func waitForMeiliTask(client meilisearch.ServiceManager, taskUID int64, operation string) error {
+	result, err := client.WaitForTask(taskUID, 50*time.Millisecond)
 	if err != nil {
 		return err
 	}
 	if result.Status != meilisearch.TaskStatusSucceeded {
-		return fmt.Errorf("meilisearch index %q creation finished with status %q: %s", uid, result.Status, result.Error.Message)
+		return fmt.Errorf("%s finished with status %q: %s", operation, result.Status, result.Error.Message)
 	}
-
 	return nil
 }
 

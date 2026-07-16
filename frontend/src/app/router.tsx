@@ -6,6 +6,7 @@ import ImagePage from '@/features/images/pages/image-page'
 import ImagesPage from '@/features/images/pages/images-page'
 import SettingsPage from '@/features/settings/pages/settings-page'
 import UserPage from '@/features/user/pages/user-page'
+import SearchPage from '@/features/search/pages/search-page'
 
 export const router = createBrowserRouter([
   {
@@ -35,6 +36,10 @@ export const router = createBrowserRouter([
       {
         path: '/favorite',
         Component: FavoritesPage,
+      },
+      {
+        path: '/search',
+        Component: SearchPage,
       },
     ],
   },

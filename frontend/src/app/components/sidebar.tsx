@@ -1,4 +1,4 @@
-import { Bookmark, ChevronUp, CircleUserRound, ExternalLink, FileText, Home, LogIn, LogOut, Settings, SquareMousePointer, User2 } from "lucide-react";
+import { Bookmark, ChevronUp, CircleUserRound, ExternalLink, FileText, Home, LogIn, LogOut, Search, Settings, SquareMousePointer, User2 } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/shared/components/ui/sidebar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/shared/components/ui/dropdown-menu";
 import useAuth from "@/features/auth/hooks/use-auth";
@@ -19,11 +19,11 @@ const items = [
     url: '/image',
     icon: SquareMousePointer,
   },
-  // {
-  //   title: "Search",
-  //   url: "/search",
-  //   icon: Search,
-  // },
+  {
+    title: "Search",
+    url: "/search",
+    icon: Search,
+  },
   {
     title: "Favorite",
     url: "/favorite",

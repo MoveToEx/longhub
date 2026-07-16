@@ -349,100 +349,6 @@ func (q *Queries) DeletePasskey(ctx context.Context, arg DeletePasskeyParams) er
 	return err
 }
 
-const filterImages = `-- name: FilterImages :many
-WITH current_version AS (
-  SELECT DISTINCT ON (image_id)
-  id AS version_id, image_id, text, rating
-  FROM public.version
-  ORDER BY image_id, version_id DESC
-),
-include_tag_ids AS (
-  SELECT id
-  FROM tag
-  WHERE tag.name = ANY ($4::TEXT[])
-),
-exclude_tag_ids AS (
-  SELECT id
-  FROM tag
-  WHERE tag.name = ANY ($5::TEXT[])
-)
-SELECT i.id, i.image_url, i.image_key, i.created_at, cv.text, cv.rating, i.user_id, i.deleted_at
-FROM image i
-JOIN current_version cv ON cv.image_id = i.id
-
-JOIN version_tag vt_in
-  ON vt_in.version_id = cv.version_id
-JOIN include_tag_ids it
-  ON it.id = vt_in.tag_id
-  
-LEFT JOIN version_tag vt_ex
-  ON vt_ex.version_id = cv.version_id
- AND vt_ex.tag_id IN (SELECT id FROM exclude_tag_ids)
-WHERE cv.text LIKE CONCAT('%', $3, '%')
-GROUP BY i.id, cv.version_id
-HAVING
-  COUNT(DISTINCT it.id) = (SELECT COUNT(*) FROM include_tag_ids)
-  AND COUNT(vt_ex.tag_id) = 0
-LIMIT $1
-OFFSET $2
-`
-
-type FilterImagesParams struct {
-	Limit       int32       `json:"limit"`
-	Offset      int32       `json:"offset"`
-	Text        interface{} `json:"text"`
-	IncludeTags []string    `json:"includeTags"`
-	ExcludeTags []string    `json:"excludeTags"`
-}
-
-type FilterImagesRow struct {
-	ID        int64            `json:"id"`
-	ImageUrl  string           `json:"imageUrl"`
-	ImageKey  string           `json:"imageKey"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	Text      string           `json:"text"`
-	Rating    Rating           `json:"rating"`
-	UserID    int64            `json:"userId"`
-	DeletedAt pgtype.Timestamp `json:"deletedAt"`
-}
-
-// INCLUDE: must contain ALL include tags
-// EXCLUDE: must contain NONE of exclude tags
-func (q *Queries) FilterImages(ctx context.Context, arg FilterImagesParams) ([]FilterImagesRow, error) {
-	rows, err := q.db.Query(ctx, filterImages,
-		arg.Limit,
-		arg.Offset,
-		arg.Text,
-		arg.IncludeTags,
-		arg.ExcludeTags,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []FilterImagesRow{}
-	for rows.Next() {
-		var i FilterImagesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.ImageUrl,
-			&i.ImageKey,
-			&i.CreatedAt,
-			&i.Text,
-			&i.Rating,
-			&i.UserID,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getAppKey = `-- name: GetAppKey :one
 SELECT id, label, created_at, user_id, permission, last_activated_at, key FROM appkey
 WHERE key = $1
@@ -855,6 +761,7 @@ SELECT v.text, v.rating, im.id, im.image_url, ARRAY(
 )::TEXT[] AS tags FROM image im
 INNER JOIN version v ON im.current_version_id = v.id
 WHERE im.id = ANY($1::BIGINT[])
+  AND im.deleted_at IS NULL
 ORDER BY ARRAY_POSITION($1::BIGINT[], im.id)
 `
 
@@ -894,9 +801,10 @@ func (q *Queries) GetImagesByIds(ctx context.Context, ids []int64) ([]GetImagesB
 
 const getImagesByUser = `-- name: GetImagesByUser :many
 SELECT
-    image.id, text, rating, image_url, image_key, current_version_id FROM image
-JOIN version ON image.current_version_id = version.id
-WHERE image.user_id = $1 AND image.deleted_at IS NULL
+    im.id, text, rating, image_url, image_key, current_version_id FROM image im
+JOIN version ON im.current_version_id = version.id
+WHERE im.user_id = $1 AND im.deleted_at IS NULL
+ORDER BY im.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
@@ -1091,11 +999,11 @@ func (q *Queries) GetTagsByImage(ctx context.Context, id int64) ([]Tag, error) {
 const getTagsByVersion = `-- name: GetTagsByVersion :many
 SELECT tag.name FROM tag
 INNER JOIN version_tag ON version_tag.tag_id = tag.id
-WHERE tag.id = $1
+WHERE version_tag.tag_id = $1
 `
 
-func (q *Queries) GetTagsByVersion(ctx context.Context, id int64) ([]string, error) {
-	rows, err := q.db.Query(ctx, getTagsByVersion, id)
+func (q *Queries) GetTagsByVersion(ctx context.Context, tagID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, getTagsByVersion, tagID)
 	if err != nil {
 		return nil, err
 	}
@@ -1161,6 +1069,7 @@ WITH candidates AS (
 SELECT
     v.id, v.created_at, v.image_id, v.version, v.text, v.rating, v.user_id,
     im.id, im.created_at, im.updated_at, im.deleted_at, im.user_id, im.image_key, im.image_url, im.image_hash, im.active_deletion_id, im.current_version_id, im.indexed_version,
+    ui.username AS uploader,
     ARRAY(
       SELECT name
       FROM tag t
@@ -1172,6 +1081,7 @@ SELECT
 FROM candidates c
 JOIN version v ON v.id = c.id
 JOIN image im ON im.id = v.image_id
+JOIN user_identifier ui ON ui.id = im.user_id
 FOR UPDATE OF im SKIP LOCKED
 `
 
@@ -1184,6 +1094,7 @@ type GetUnindexedVersionsRow struct {
 	Rating    Rating           `json:"rating"`
 	UserID    int64            `json:"userId"`
 	Image     Image            `json:"image"`
+	Uploader  string           `json:"uploader"`
 	Tags      []string         `json:"tags"`
 }
 
@@ -1217,6 +1128,7 @@ func (q *Queries) GetUnindexedVersions(ctx context.Context) ([]GetUnindexedVersi
 			&i.Image.ActiveDeletionID,
 			&i.Image.CurrentVersionID,
 			&i.Image.IndexedVersion,
+			&i.Uploader,
 			&i.Tags,
 		); err != nil {
 			return nil, err
@@ -1451,6 +1363,7 @@ const listImages = `-- name: ListImages :many
 SELECT i.id, image_url, image_key, i.user_id, current_version_id, v.text, v.rating
 FROM public.image i
 JOIN public.version v ON i.current_version_id = v.id
+WHERE i.deleted_at ISNULL
 ORDER BY i.created_at DESC
 LIMIT $1 OFFSET $2
 `

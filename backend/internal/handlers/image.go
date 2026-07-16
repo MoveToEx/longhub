@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"long/internal/config"
 	"long/internal/constant"
 	"long/internal/db"
@@ -123,15 +124,20 @@ func ListImages(c *gin.Context) {
 	})
 }
 
+type SearchCondition struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
 type SearchPayload struct {
-	Text        string   `json:"text"`
-	IncludeTags []string `json:"includeTags"`
-	ExcludeTags []string `json:"excludeTags"`
+	Conditions []SearchCondition `json:"conditions"`
+	OrderBy    string            `json:"orderBy"`
+	Order      string            `json:"order"`
 }
 
 type SearchResponse struct {
-	Total  int64 `json:"total"`
-	Images []sqlc.FilterImagesRow
+	Total  int64                    `json:"total"`
+	Images []sqlc.GetImagesByIdsRow `json:"images"`
 }
 
 func SearchImages(c *gin.Context) {
@@ -144,24 +150,107 @@ func SearchImages(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
+	if len(payload.Conditions) > 50 {
+		utils.ErrorResponse(c, 400, "Too many search conditions")
+		return
+	}
 
-	img, err := db.Query().FilterImages(ctx, sqlc.FilterImagesParams{
-		Limit:       int32(limit),
-		Offset:      int32(offset),
-		IncludeTags: payload.IncludeTags,
-		ExcludeTags: payload.ExcludeTags,
-		Text:        payload.Text,
-	})
+	filters := make([]string, 0, len(payload.Conditions))
+	for _, condition := range payload.Conditions {
+		value := strings.TrimSpace(condition.Value)
+		if value == "" {
+			utils.ErrorResponse(c, 400, "Search condition values cannot be empty")
+			return
+		}
 
+		quoted := quoteMeiliFilterValue(value)
+		switch condition.Type {
+		case "tagInclude":
+			filters = append(filters, "tags = "+quoted)
+		case "tagExclude":
+			filters = append(filters, "NOT tags = "+quoted)
+		case "ratingEq":
+			rating, ok := map[string]int{"none": 1, "moderate": 2, "violent": 3}[value]
+			if !ok {
+				utils.ErrorResponse(c, 400, "Invalid rating")
+				return
+			}
+			filters = append(filters, fmt.Sprintf("rating = %d", rating))
+		case "textContains":
+			filters = append(filters, "text CONTAINS "+quoted)
+		case "uploadedBy":
+			if userID, err := strconv.ParseInt(value, 10, 64); err == nil && userID > 0 {
+				filters = append(filters, fmt.Sprintf("(uploader = %s OR userId = %d)", quoted, userID))
+			} else {
+				filters = append(filters, "uploader = "+quoted)
+			}
+		default:
+			utils.ErrorResponse(c, 400, "Invalid search condition")
+			return
+		}
+	}
+
+	orderBy := map[string]string{
+		"id":         "id",
+		"uploadDate": "createdAt",
+	}[payload.OrderBy]
+	if orderBy == "" {
+		orderBy = "createdAt"
+	}
+	order := payload.Order
+	if order != "asc" && order != "desc" {
+		order = "desc"
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+	if limit < 1 {
+		limit = 24
+	}
+
+	request := &meilisearch.SearchRequest{
+		Offset:               int64(offset),
+		Limit:                int64(limit),
+		AttributesToRetrieve: []string{"id"},
+		Sort:                 []string{orderBy + ":" + order},
+	}
+	if len(filters) > 0 {
+		request.Filter = strings.Join(filters, " AND ")
+	}
+
+	msr, err := config.MeiliSearch().Index("images").Search("", request)
 	if err != nil {
-		utils.ErrorResponse(c, 400, "Failed when collecting images")
+		utils.ErrorResponse(c, 500, "Failed when searching images: %v", err)
+		return
+	}
+
+	ids := make([]int64, 0, len(msr.Hits))
+	for i := range msr.Hits {
+		var item MeilisearchResult
+		if err := msr.Hits[i].DecodeInto(&item); err != nil {
+			utils.ErrorResponse(c, 500, "Failed when reading search results")
+			return
+		}
+		ids = append(ids, item.ID)
+	}
+
+	images, err := db.Query().GetImagesByIds(c.Request.Context(), ids)
+	if err != nil {
+		utils.ErrorResponse(c, 500, "Failed when fetching images")
 		return
 	}
 
 	utils.SuccessResponse(c, SearchResponse{
-		Images: img,
+		Total:  msr.EstimatedTotalHits,
+		Images: images,
 	})
+}
+
+func quoteMeiliFilterValue(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `"`, `\"`)
+	return `"` + value + `"`
 }
 
 type QuickSearchPayload struct {
@@ -226,6 +315,10 @@ func QuickSearchImages(c *gin.Context) {
 	msr, err := ms.Index("images").Search(strings.Join(payload.Keywords, " "), &meilisearch.SearchRequest{
 		Limit: 16,
 	})
+	if err != nil {
+		utils.ErrorResponse(c, 500, "Failed when searching images")
+		return
+	}
 
 	ids := []int64{}
 
