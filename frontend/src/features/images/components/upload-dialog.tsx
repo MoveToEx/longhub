@@ -10,13 +10,15 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import DragDrop from '@/shared/components/drag-drop';
 import api from '@/shared/lib/axios';
 import type { Rating, SignResponse, Wrapped } from '@/shared/lib/types';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { Field, FieldError, FieldLabel } from '@/shared/components/ui/field';
 import { Input } from '@/shared/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/shared/components/ui/toggle-group';
 import { Spinner } from '@/shared/components/ui/spinner';
 import { mutate } from '@/shared/lib/swr';
 import TagsInput from '@/features/tags/components/tags-input';
+import { formatError } from '@/shared/lib/utils';
+import { toast } from 'sonner';
 
 const uploadSchema = z.object({
   text: z.string().refine(val => val.indexOf(' ') === -1, 'Text should not contain spaces'),
@@ -86,9 +88,7 @@ export default function UploadDialog() {
       setFiles([...files.slice(undefined, selected), ...files.slice(selected + 1)]);
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        // 
-      }
+      toast.error(formatError(e));
     }
     finally {
       setLoading(false);
@@ -175,7 +175,7 @@ export default function UploadDialog() {
 
           <div className='col-span-2 md:col-span-1'>
 
-            <form ref={formRef} className='flex flex-col gap-4' onSubmit={form.handleSubmit(data => submit(data, files[0]))}>
+            <form ref={formRef} className='flex flex-col gap-4' onSubmit={form.handleSubmit(data => submit(data, files[selected]))}>
               <Controller
                 name='text'
                 control={form.control}

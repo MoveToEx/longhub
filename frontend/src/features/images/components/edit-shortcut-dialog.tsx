@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Button } from "@/shared/components/ui/button";
 import api from "@/shared/lib/axios";
 import { toast } from "sonner";
-import { AxiosError } from "axios";
+import { formatError } from "@/shared/lib/utils";
 import { useEffect, useState } from "react";
 import { mutate } from "@/shared/lib/swr";
 import { useAppDispatch, useAppSelector } from "@/shared/hooks/use-redux";
@@ -63,12 +63,10 @@ export default function EditShortcutDialog() {
       }
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        form.setError('root', {
-          type: 'custom',
-          message: e.response?.data.error
-        })
-      }
+      form.setError('root', {
+        type: 'custom',
+        message: formatError(e)
+      })
     }
     finally {
       setLoading(false);
@@ -86,12 +84,10 @@ export default function EditShortcutDialog() {
       dispatch(closeEditShortcutDialog());
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        form.setError('root', {
-          type: 'custom',
-          message: e.response?.data.error
-        });
-      }
+      form.setError('root', {
+        type: 'custom',
+        message: formatError(e)
+      });
     }
     finally {
       setLoading(false);
@@ -137,6 +133,7 @@ export default function EditShortcutDialog() {
                 </Field>
               )} />
           </FieldGroup>
+          <FieldError errors={[form.formState.errors.root]} />
 
 
           <DialogFooter>

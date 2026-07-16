@@ -5,7 +5,7 @@ import { Button } from "@/shared/components/ui/button";
 import { useState } from "react";
 import { Spinner } from "@/shared/components/ui/spinner";
 import api from "@/shared/lib/axios";
-import { AxiosError } from "axios";
+import { formatError } from "@/shared/lib/utils";
 import { toast } from "sonner";
 import usePasskey from "../hooks/use-passkey";
 
@@ -36,9 +36,7 @@ export default function DeletePasskeyDialog({
       toast.success('Deleted');
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        toast.error(e.response?.data.error);
-      }
+      toast.error(formatError(e));
     }
     finally {
       setLoading(false);

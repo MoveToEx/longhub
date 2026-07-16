@@ -7,13 +7,14 @@ import (
 )
 
 type Response struct {
-	Error any `json:"error"`
-	Data  any `json:"data,omitempty"`
+	Error *string `json:"error"`
+	Data  any     `json:"data,omitempty"`
 }
 
 func ErrorResponse(c *gin.Context, status int, format string, args ...any) {
+	errorMessage := fmt.Sprintf(format, args...)
 	c.JSON(status, Response{
-		Error: fmt.Sprintf(format, args...),
+		Error: &errorMessage,
 	})
 }
 

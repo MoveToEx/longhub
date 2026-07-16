@@ -14,7 +14,6 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Dialog as BaseDialog } from '@base-ui/react'
 import { toast } from "sonner";
 import { mutate } from "@/shared/lib/swr";
-import { AxiosError } from "axios";
 import Tags from "@/features/tags/components/tags";
 import useAuth from "@/features/auth/hooks/use-auth";
 import z from "zod";
@@ -28,6 +27,7 @@ import type { Rating } from "@/shared/lib/types";
 import _ from "lodash";
 import LikeButton from "../components/like-button";
 import { Alert, AlertDescription } from "@/shared/components/ui/alert";
+import { formatError } from "@/shared/lib/utils";
 
 
 type Payload = {
@@ -52,9 +52,7 @@ function RevertDialog({ handle }: { handle: BaseDialog.Handle<Payload> }) {
       toast.success('Success');
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        toast.error(e.response?.data.error);
-      }
+      toast.error(formatError(e));
     }
     finally {
       setLoading(false);
@@ -141,9 +139,7 @@ function EditDialog({ handle }: { handle: BaseDialog.Handle<Payload> }) {
       toast.success('Success');
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        toast.error(e.response?.data.error);
-      }
+      toast.error(formatError(e));
     }
     finally {
       setLoading(false);

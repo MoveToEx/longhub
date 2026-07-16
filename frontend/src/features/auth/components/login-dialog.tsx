@@ -15,11 +15,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/shared/components/ui/button";
 import api from "@/shared/lib/axios";
 import { toast } from "sonner";
-import { AxiosError } from "axios";
 import { useLocalStorage } from "usehooks-ts";
 import { useState } from "react";
 import RegisterDialog from "@/features/auth/components/register-dialog";
-import { base64ToArray } from "@/shared/lib/utils";
+import { base64ToArray, formatError } from "@/shared/lib/utils";
 import type { Wrapped } from "@/shared/lib/types";
 import { mutate } from "@/shared/lib/swr";
 
@@ -68,12 +67,10 @@ function PasswordLogin({
       }
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        form.setError('root', {
-          type: 'custom',
-          message: e.response?.data.error
-        })
-      }
+      form.setError('root', {
+        type: 'custom',
+        message: formatError(e)
+      })
     }
     finally {
       setLoading(false);
@@ -124,6 +121,7 @@ function PasswordLogin({
             </Field>
           )} />
       </FieldGroup>
+      <FieldError errors={[form.formState.errors.root]} />
 
       <div className='w-full flex flex-col mt-6 gap-2'>
         <Button variant='outline' onClick={() => onMethodChange('webauthn')}>
@@ -193,9 +191,7 @@ function WebAuthnLogin({
       handle.close();
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        toast.error(e.response?.data.error)
-      }
+      toast.error(formatError(e))
     }
     finally {
       setLoading(false);

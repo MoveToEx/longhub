@@ -13,7 +13,7 @@ import { Dialog as BaseDialog } from '@base-ui/react'
 import { Button } from "@/shared/components/ui/button";
 import api from "@/shared/lib/axios";
 import { toast } from "sonner";
-import { AxiosError } from "axios";
+import { formatError } from "@/shared/lib/utils";
 import { useState } from 'react'
 import { User } from 'lucide-react'
 import { Spinner } from '@/shared/components/ui/spinner'
@@ -68,12 +68,10 @@ export default function RegisterDialog() {
       }
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        form.setError('root', {
-          type: 'custom',
-          message: e.response?.data.error
-        });
-      }
+      form.setError('root', {
+        type: 'custom',
+        message: formatError(e)
+      });
     }
     finally {
       setLoading(false);
@@ -182,6 +180,7 @@ export default function RegisterDialog() {
                 </Field>
               )} />
           </FieldGroup>
+          <FieldError errors={[form.formState.errors.root]} />
 
           <div className='flex flex-row justify-end'>
             <span>

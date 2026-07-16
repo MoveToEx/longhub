@@ -4,8 +4,7 @@ import { Spinner } from "@/shared/components/ui/spinner";
 import usePasskey from "@/features/settings/hooks/use-passkey"
 import api from "@/shared/lib/axios";
 import type { Wrapped } from "@/shared/lib/types";
-import { base64ToArray } from "@/shared/lib/utils";
-import { AxiosError } from "axios";
+import { base64ToArray, formatError } from "@/shared/lib/utils";
 import { Edit, EllipsisVertical, Key, Plus, ScanFace, Trash } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -89,12 +88,7 @@ function PasskeySection() {
       editHandle.openWithPayload({ id, name: 'Unnamed' });
     }
     catch (e) {
-      if (e instanceof AxiosError) {
-        toast.error(e.response?.data.error)
-      }
-      else if (e instanceof Error) {
-        console.log(e.message);
-      }
+      toast.error(formatError(e));
     }
     finally {
       setLoading(false);

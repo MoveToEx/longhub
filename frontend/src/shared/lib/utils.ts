@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import mime from 'mime';
+import { isAxiosError } from 'axios';
+import type { ErrorResponse } from '@/shared/lib/types';
 import {
   PREFERENCE_STORAGE_KEY,
   schema,
@@ -8,6 +10,19 @@ import {
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+/** Returns a safe, user-facing message for failed requests and browser APIs. */
+export function formatError(error: unknown, fallback = 'Something went wrong. Please try again.') {
+  const responseData = isAxiosError<ErrorResponse>(error) ? error.response?.data : undefined;
+
+  if (typeof responseData?.error === 'string' && responseData.error.trim()) {
+    return responseData.error;
+  }
+
+  if (error instanceof Error && error.message.trim()) return error.message;
+
+  return fallback;
 }
 
 

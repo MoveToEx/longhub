@@ -7,6 +7,7 @@ import { Heart } from "lucide-react";
 import { toast } from "sonner";
 import { useAppDispatch } from "@/shared/hooks/use-redux";
 import { openEditShortcutDialog } from "@/features/images/state/edit-shortcut-dialog-slice";
+import { formatError } from "@/shared/lib/utils";
 
 export default function LikeButton({
   id,
@@ -25,16 +26,21 @@ export default function LikeButton({
           return;
         }
 
-        await api.post('/favorite', {
-          imageId: id
-        });
-        await mutate();
-        toast.success('Added to favorites', {
-          action: {
-            label: 'Customize',
-            onClick: () => dispatch(openEditShortcutDialog({ id, shortcut: '' }))
-          }
-        })
+        try {
+          await api.post('/favorite', {
+            imageId: id
+          });
+          await mutate();
+          toast.success('Added to favorites', {
+            action: {
+              label: 'Customize',
+              onClick: () => dispatch(openEditShortcutDialog({ id, shortcut: '' }))
+            }
+          })
+        }
+        catch (e) {
+          toast.error(formatError(e));
+        }
       }}
       variant='outline'
       disabled={isLoading || !user}>

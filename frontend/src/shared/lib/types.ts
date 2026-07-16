@@ -1,5 +1,9 @@
+export type ErrorResponse = {
+  error: string;
+}
+
 export type Wrapped<T> = {
-  error?: string | undefined;
+  error: null;
   data: T
 }
 
