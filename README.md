@@ -18,9 +18,17 @@ When deploying manually or setting up for development, `.env` files are required
 
 Requirements:
 - Go >= 1.26
-- Node.js >= 26 with corepack enabled
+- Node.js >= 25 with corepack enabled
 - [goose](https://github.com/pressly/goose)
 - PostgreSQL
+
+
+Extra environment variables in `backend/.env`:
+```
+GOOSE_DRIVER=postgres
+GOOSE_DBSTRING=postgres://user:password@host/db  # replace this
+GOOSE_MIGRATION_DIR=./db/migrations
+```
 
 ```sh
 $ git clone https://github.com/MoveToEx/longhub.git

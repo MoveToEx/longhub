@@ -229,15 +229,17 @@ func QuickSearchImages(c *gin.Context) {
 
 	ids := []int64{}
 
-	for i := range msr.Hits {
-		var item MeilisearchResult
+	if msr != nil {
+		for i := range msr.Hits {
+			var item MeilisearchResult
 
-		if err := msr.Hits[i].DecodeInto(&item); err != nil {
-			utils.ErrorResponse(c, 500, "Failed when fetching rows")
-			return
+			if err := msr.Hits[i].DecodeInto(&item); err != nil {
+				utils.ErrorResponse(c, 500, "Failed when fetching rows")
+				return
+			}
+
+			ids = append(ids, item.ID)
 		}
-
-		ids = append(ids, item.ID)
 	}
 
 	im, err := db.Query().GetImagesByIds(ctx, ids)
@@ -467,48 +469,54 @@ func AcknowledgeSession(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	sess, err := db.Query().CompleteUploadSession(ctx, sqlc.CompleteUploadSessionParams{
-		ID:     payload.SessionID,
-		UserID: userID.(int64),
+	var id int64
+
+	err := db.Transaction(ctx, func(tx *sqlc.Queries) error {
+		sess, err := db.Query().CompleteUploadSession(ctx, sqlc.CompleteUploadSessionParams{
+			ID:     payload.SessionID,
+			UserID: userID.(int64),
+		})
+
+		if err != nil {
+			return err
+		}
+		err = db.Query().CreateTags(ctx, payload.Tags)
+
+		if err != nil {
+			return err
+		}
+
+		id, err := db.Query().CreateImage(ctx, sqlc.CreateImageParams{
+			ImageKey: sess.Key,
+			ImageUrl: config.GetConfig().S3.URLPrefix + sess.Key,
+			UserID:   userID.(int64),
+		})
+
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Query().InitializeVersion(ctx, sqlc.InitializeVersionParams{
+			ImageID:  id,
+			Text:     payload.Text,
+			TagNames: payload.Tags,
+			Rating:   sqlc.Rating(payload.Rating),
+			UserID:   userID.(int64),
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 
 	if err != nil {
-		utils.ErrorResponse(c, 409, "Server-side session info mismatch")
-		return
-	}
-
-	err = db.Query().CreateTags(ctx, payload.Tags)
-
-	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when creating tags")
-		return
-	}
-
-	imageID, err := db.Query().CreateImage(ctx, sqlc.CreateImageParams{
-		ImageKey: sess.Key,
-		ImageUrl: config.GetConfig().S3.URLPrefix + sess.Key,
-		UserID:   userID.(int64),
-	})
-
-	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when creating image: %v", err)
-		return
-	}
-
-	_, err = db.Query().InitializeVersion(ctx, sqlc.InitializeVersionParams{
-		ImageID:  imageID,
-		Text:     payload.Text,
-		TagNames: payload.Tags,
-		Rating:   sqlc.Rating(payload.Rating),
-		UserID:   userID.(int64),
-	})
-
-	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when creating new version: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when creating image")
 		return
 	}
 
 	utils.SuccessResponse(c, AckResponse{
-		ID: imageID,
+		ID: id,
 	})
 }

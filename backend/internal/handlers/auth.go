@@ -160,10 +160,7 @@ func ValidateWebAuthnLogin(c *gin.Context) {
 	}, *session, c.Request)
 
 	if err != nil {
-		e, ok := err.(*protocol.Error)
-		if ok {
-			utils.ErrorResponse(c, 400, "Invalid credential: %s %s", e.Details, e.DevInfo)
-		}
+		utils.ErrorResponse(c, 400, "Invalid credential")
 		return
 	}
 

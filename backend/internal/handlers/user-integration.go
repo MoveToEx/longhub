@@ -119,7 +119,7 @@ func EditAppKey(c *gin.Context) {
 	}
 
 	if key.UserID != userID {
-		utils.ErrorResponse(c, 409, "User ID mismatch")
+		utils.ErrorResponse(c, 404, "Invalid key")
 		return
 	}
 
@@ -166,7 +166,7 @@ func DeleteAppKey(c *gin.Context) {
 	}
 
 	if key.UserID != userID {
-		utils.ErrorResponse(c, 409, "User ID mismatch")
+		utils.ErrorResponse(c, 404, "Invalid key")
 		return
 	}
 

@@ -94,7 +94,7 @@ func ValidateAddPasskey(c *gin.Context) {
 		return
 	}
 
-	db.Query().CreateCredential(ctx, sqlc.CreateCredentialParams{
+	err = db.Query().CreateCredential(ctx, sqlc.CreateCredentialParams{
 		ID:         cred.ID,
 		UserID:     userID,
 		PublicKey:  cred.PublicKey,
@@ -106,6 +106,11 @@ func ValidateAddPasskey(c *gin.Context) {
 			Bytes: [16]byte(cred.Authenticator.AAGUID),
 		},
 	})
+
+	if err != nil {
+		utils.ErrorResponse(c, 500, "Failed when creating credential")
+		return
+	}
 
 	utils.SuccessResponse(c, ValidateAddPasskeyResponse{
 		ID: cred.ID,

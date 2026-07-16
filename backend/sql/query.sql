@@ -25,6 +25,7 @@ ORDER BY v.created_at DESC;
 SELECT i.id, image_url, image_key, i.user_id, current_version_id, v.text, v.rating
 FROM public.image i
 JOIN public.version v ON i.current_version_id = v.id
+WHERE i.deleted_at ISNULL
 ORDER BY i.created_at DESC
 LIMIT $1 OFFSET $2;
 
@@ -68,9 +69,10 @@ RETURNING image.id;
 
 -- name: GetImagesByUser :many
 SELECT
-    image.id, text, rating, image_url, image_key, current_version_id FROM image
-JOIN version ON image.current_version_id = version.id
-WHERE image.user_id = $1 AND image.deleted_at IS NULL
+    im.id, text, rating, image_url, image_key, current_version_id FROM image im
+JOIN version ON im.current_version_id = version.id
+WHERE im.user_id = $1 AND im.deleted_at IS NULL
+ORDER BY im.created_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: CountImagesByUser :one
@@ -96,7 +98,7 @@ JOIN image_version iv ON EXISTS (
 -- name: GetTagsByVersion :many
 SELECT tag.name FROM tag
 INNER JOIN version_tag ON version_tag.tag_id = tag.id
-WHERE tag.id = $1;
+WHERE version_tag.tag_id = $1;
 
 -- name: CreateNewVersion :exec
 WITH new_version AS (

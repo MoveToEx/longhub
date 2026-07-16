@@ -28,7 +28,7 @@ services:
     volumes:
       - msdata:/meili_data
     healthcheck:
-      test: ["CMD-SHELL", "curl", "http://localhost:7700/health"]
+      test: ["CMD", "curl", "http://localhost:7700/health"]
       interval: 5s
       timeout: 30s
       retries: 5

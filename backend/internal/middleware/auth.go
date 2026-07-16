@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"long/internal/db"
 	"long/internal/utils"
@@ -68,7 +69,7 @@ func Auth(strict bool) gin.HandlerFunc {
 			keyID := user.KeyID
 
 			go func() {
-				db.Query().UpdateAppKeyUsedDate(ctx, keyID)
+				db.Query().UpdateAppKeyUsedDate(context.Background(), keyID)
 			}()
 
 			c.Set("UserID", user.ID)

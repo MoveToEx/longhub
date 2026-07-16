@@ -7,6 +7,7 @@ import (
 	"long/internal/config"
 	"long/internal/db"
 	"long/internal/sqlc"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -88,7 +89,7 @@ func SaveWebAuthnSession(ctx context.Context, data *webauthn.SessionData) (strin
 
 	client := config.Valkey()
 
-	cmd := client.B().Set().Key(key).Value(valkey.BinaryString(value)).Build()
+	cmd := client.B().Set().Key(key).Value(valkey.BinaryString(value)).Ex(time.Minute * 5).Build()
 	err = client.Do(ctx, cmd).Error()
 
 	if err != nil {
