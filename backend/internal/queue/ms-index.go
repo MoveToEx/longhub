@@ -2,17 +2,53 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
 	"long/internal/config"
 	"long/internal/db"
 	"long/internal/sqlc"
 
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/meilisearch/meilisearch-go"
 )
 
-func NewIndexTask() *asynq.Task {
-	return asynq.NewTask(TypeIndex, nil)
+type IndexArgs struct {
+	ImageID   int64 `json:"imageId"`
+	VersionID int64 `json:"versionId"`
+}
+
+func NewIndexTask(imageID, versionID int64) (*asynq.Task, error) {
+	payload, err := json.Marshal(IndexArgs{
+		ImageID:   imageID,
+		VersionID: versionID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return asynq.NewTask(TypeIndex, payload), nil
+}
+
+func EnqueueIndex(ctx context.Context, imageID, versionID int64) error {
+	task, err := NewIndexTask(imageID, versionID)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.EnqueueContext(ctx, task, asynq.Unique(time.Minute))
+	if errors.Is(err, asynq.ErrDuplicateTask) {
+		return nil
+	}
+	return err
+}
+
+func NewIndexReconcileTask() *asynq.Task {
+	return asynq.NewTask(TypeIndexReconcile, nil)
 }
 
 type IndexPayloadItem struct {
@@ -37,57 +73,73 @@ func toInt(r sqlc.Rating) int {
 	return -1
 }
 
-func HandleIndexTask(ctx context.Context, _ *asynq.Task) error {
-	ms := config.MeiliSearch()
+func HandleIndexTask(ctx context.Context, task *asynq.Task) error {
+	var args IndexArgs
+	if err := json.Unmarshal(task.Payload(), &args); err != nil {
+		return err
+	}
 
-	err := db.Transaction(ctx, func(tx *sqlc.Queries) error {
-		versions, err := tx.GetUnindexedVersions(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		if len(versions) == 0 {
+	return db.Transaction(ctx, func(tx *sqlc.Queries) error {
+		version, err := tx.GetUnindexedVersion(ctx, sqlc.GetUnindexedVersionParams{
+			ImageID:   args.ImageID,
+			VersionID: args.VersionID,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
-
-		doc := []IndexPayloadItem{}
-
-		for i := range versions {
-			doc = append(doc, IndexPayloadItem{
-				ID:        versions[i].ImageID,
-				Text:      versions[i].Text,
-				Tags:      versions[i].Tags,
-				Rating:    toInt(versions[i].Rating),
-				UserID:    versions[i].Image.UserID,
-				Uploader:  versions[i].Uploader,
-				CreatedAt: versions[i].Image.CreatedAt.Time.Unix(),
-			})
-		}
-
-		_, err = ms.Index("images").AddDocuments(doc, &meilisearch.DocumentOptions{
-			PrimaryKey: new("id"),
-		})
-
 		if err != nil {
 			return err
 		}
 
-		for i := range versions {
-			err := tx.CommitUnindexedVersions(ctx, sqlc.CommitUnindexedVersionsParams{
-				ID: versions[i].ImageID,
-				IndexedVersion: pgtype.Int8{
-					Valid: true,
-					Int64: versions[i].ID,
-				},
-			})
-			if err != nil {
-				return err
-			}
+		document := IndexPayloadItem{
+			ID:        version.ImageID,
+			Text:      version.Text,
+			Tags:      version.Tags,
+			Rating:    toInt(version.Rating),
+			UserID:    version.Image.UserID,
+			Uploader:  version.Uploader,
+			CreatedAt: version.Image.CreatedAt.Time.Unix(),
 		}
 
-		return nil
-	})
+		meili := config.MeiliSearch()
+		meiliTask, err := meili.Index("images").AddDocumentsWithContext(
+			ctx,
+			[]IndexPayloadItem{document},
+			&meilisearch.DocumentOptions{PrimaryKey: new("id")},
+		)
+		if err != nil {
+			return err
+		}
 
-	return err
+		result, err := meili.WaitForTaskWithContext(ctx, meiliTask.TaskUID, 50*time.Millisecond)
+		if err != nil {
+			return err
+		}
+		if result.Status != meilisearch.TaskStatusSucceeded {
+			return fmt.Errorf("indexing image %d finished with status %q: %s", args.ImageID, result.Status, result.Error.Message)
+		}
+
+		return tx.CommitUnindexedVersion(ctx, sqlc.CommitUnindexedVersionParams{
+			ImageID: args.ImageID,
+			VersionID: pgtype.Int8{
+				Int64: args.VersionID,
+				Valid: true,
+			},
+		})
+	})
+}
+
+func HandleIndexReconcileTask(ctx context.Context, _ *asynq.Task) error {
+	images, err := db.Query().GetUnindexedImages(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, image := range images {
+		if err := EnqueueIndex(ctx, image.ImageID, image.VersionID); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"long/internal/config"
 	"long/internal/constant"
 	"long/internal/db"
+	"long/internal/queue"
 	"long/internal/sqlc"
 	"long/internal/utils"
 	"mime"
@@ -411,6 +413,10 @@ func UpdateImage(c *gin.Context) {
 	rating := sqlc.Rating(current.Rating)
 	text := current.Text
 	tags, err := db.Query().GetTagsByVersion(ctx, current.CurrentVersionID.Int64)
+	if err != nil {
+		utils.ErrorResponse(c, 500, "Failed when collecting current tags: %v", err)
+		return
+	}
 
 	if payload.Text != nil {
 		text = *payload.Text
@@ -419,28 +425,34 @@ func UpdateImage(c *gin.Context) {
 		rating = sqlc.Rating(*payload.Rating)
 	}
 	if payload.Tags != nil {
-		if len(*payload.Tags) != 0 {
-			err := db.Query().CreateTags(ctx, *payload.Tags)
-			if err != nil {
-				utils.ErrorResponse(c, 500, "Failed when creating tags")
-				return
-			}
-		}
-
 		tags = *payload.Tags
 	}
 
-	err = db.Query().CreateNewVersion(ctx, sqlc.CreateNewVersionParams{
-		ImageID:  imageID,
-		Text:     text,
-		Rating:   rating,
-		UserID:   userID,
-		TagNames: tags,
+	var versionID int64
+	err = db.Transaction(ctx, func(tx *sqlc.Queries) error {
+		if len(tags) != 0 {
+			if err := tx.CreateTags(ctx, tags); err != nil {
+				return err
+			}
+		}
+
+		versionID, err = tx.CreateNewVersion(ctx, sqlc.CreateNewVersionParams{
+			ImageID:  imageID,
+			Text:     text,
+			Rating:   rating,
+			UserID:   userID,
+			TagNames: tags,
+		})
+		return err
 	})
 
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when creating new version: %v", err)
 		return
+	}
+
+	if err := queue.EnqueueIndex(ctx, imageID, versionID); err != nil {
+		log.Printf("Failed when scheduling image %d version %d for indexing: %v", imageID, versionID, err)
 	}
 
 	utils.SuccessResponse(c, nil)
@@ -563,9 +575,10 @@ func AcknowledgeSession(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var id int64
+	var versionID int64
 
 	err := db.Transaction(ctx, func(tx *sqlc.Queries) error {
-		sess, err := db.Query().CompleteUploadSession(ctx, sqlc.CompleteUploadSessionParams{
+		sess, err := tx.CompleteUploadSession(ctx, sqlc.CompleteUploadSessionParams{
 			ID:     payload.SessionID,
 			UserID: userID.(int64),
 		})
@@ -573,13 +586,13 @@ func AcknowledgeSession(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		err = db.Query().CreateTags(ctx, payload.Tags)
+		err = tx.CreateTags(ctx, payload.Tags)
 
 		if err != nil {
 			return err
 		}
 
-		id, err := db.Query().CreateImage(ctx, sqlc.CreateImageParams{
+		id, err = tx.CreateImage(ctx, sqlc.CreateImageParams{
 			ImageKey: sess.Key,
 			ImageUrl: config.GetConfig().S3.URLPrefix + sess.Key,
 			UserID:   userID.(int64),
@@ -589,7 +602,7 @@ func AcknowledgeSession(c *gin.Context) {
 			return err
 		}
 
-		_, err = db.Query().InitializeVersion(ctx, sqlc.InitializeVersionParams{
+		versionID, err = tx.InitializeVersion(ctx, sqlc.InitializeVersionParams{
 			ImageID:  id,
 			Text:     payload.Text,
 			TagNames: payload.Tags,
@@ -607,6 +620,10 @@ func AcknowledgeSession(c *gin.Context) {
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when creating image")
 		return
+	}
+
+	if err := queue.EnqueueIndex(ctx, id, versionID); err != nil {
+		log.Printf("Failed when scheduling image %d version %d for indexing: %v", id, versionID, err)
 	}
 
 	utils.SuccessResponse(c, AckResponse{

@@ -28,19 +28,20 @@ func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error 
 	return err
 }
 
-const commitUnindexedVersions = `-- name: CommitUnindexedVersions :exec
+const commitUnindexedVersion = `-- name: CommitUnindexedVersion :exec
 UPDATE image
-SET indexed_version = $2
-WHERE id = $1
+SET indexed_version = $1
+WHERE id = $2
+  AND current_version_id = $1
 `
 
-type CommitUnindexedVersionsParams struct {
-	ID             int64       `json:"id"`
-	IndexedVersion pgtype.Int8 `json:"indexedVersion"`
+type CommitUnindexedVersionParams struct {
+	VersionID pgtype.Int8 `json:"versionId"`
+	ImageID   int64       `json:"imageId"`
 }
 
-func (q *Queries) CommitUnindexedVersions(ctx context.Context, arg CommitUnindexedVersionsParams) error {
-	_, err := q.db.Exec(ctx, commitUnindexedVersions, arg.ID, arg.IndexedVersion)
+func (q *Queries) CommitUnindexedVersion(ctx context.Context, arg CommitUnindexedVersionParams) error {
+	_, err := q.db.Exec(ctx, commitUnindexedVersion, arg.VersionID, arg.ImageID)
 	return err
 }
 
@@ -205,44 +206,49 @@ func (q *Queries) CreateImage(ctx context.Context, arg CreateImageParams) (int64
 	return id, err
 }
 
-const createNewVersion = `-- name: CreateNewVersion :exec
+const createNewVersion = `-- name: CreateNewVersion :one
 WITH new_version AS (
     INSERT INTO version("text", "rating", "user_id", "image_id", "version")
     SELECT $1, $2, $3, image.id, version.version + 1
     FROM image
     JOIN version ON image.current_version_id = version.id
-    WHERE image.id = $5
+    WHERE image.id = $4
     RETURNING id
 ),
 new_image AS (
     UPDATE image
     SET current_version_id = nv.id
     FROM new_version nv
-    WHERE image.id = $5
+    WHERE image.id = $4
+),
+new_version_tags AS (
+    INSERT INTO version_tag (version_id, tag_id)
+    SELECT nv.id, t.id
+    FROM new_version nv
+    JOIN tag t ON t.name = ANY($5::TEXT[])
 )
-INSERT INTO version_tag (version_id, tag_id)
-SELECT nv.id, t.id
-FROM new_version nv
-JOIN tag t ON t.name = ANY($4::TEXT[])
+SELECT id FROM new_version
 `
 
 type CreateNewVersionParams struct {
 	Text     string   `json:"text"`
 	Rating   Rating   `json:"rating"`
 	UserID   int64    `json:"userId"`
-	TagNames []string `json:"tagNames"`
 	ImageID  int64    `json:"imageId"`
+	TagNames []string `json:"tagNames"`
 }
 
-func (q *Queries) CreateNewVersion(ctx context.Context, arg CreateNewVersionParams) error {
-	_, err := q.db.Exec(ctx, createNewVersion,
+func (q *Queries) CreateNewVersion(ctx context.Context, arg CreateNewVersionParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createNewVersion,
 		arg.Text,
 		arg.Rating,
 		arg.UserID,
-		arg.TagNames,
 		arg.ImageID,
+		arg.TagNames,
 	)
-	return err
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const createTags = `-- name: CreateTags :exec
@@ -999,11 +1005,11 @@ func (q *Queries) GetTagsByImage(ctx context.Context, id int64) ([]Tag, error) {
 const getTagsByVersion = `-- name: GetTagsByVersion :many
 SELECT tag.name FROM tag
 INNER JOIN version_tag ON version_tag.tag_id = tag.id
-WHERE version_tag.tag_id = $1
+WHERE version_tag.version_id = $1
 `
 
-func (q *Queries) GetTagsByVersion(ctx context.Context, tagID int64) ([]string, error) {
-	rows, err := q.db.Query(ctx, getTagsByVersion, tagID)
+func (q *Queries) GetTagsByVersion(ctx context.Context, versionID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, getTagsByVersion, versionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1054,18 +1060,42 @@ func (q *Queries) GetTagsWithPrefix(ctx context.Context, arg GetTagsWithPrefixPa
 	return items, nil
 }
 
-const getUnindexedVersions = `-- name: GetUnindexedVersions :many
+const getUnindexedImages = `-- name: GetUnindexedImages :many
+SELECT im.id AS image_id, v.id AS version_id
+FROM image im
+JOIN version v ON v.id = im.current_version_id
+WHERE im.indexed_version IS NULL OR im.indexed_version != v.id
+ORDER BY im.id
+LIMIT 100
+`
 
-WITH candidates AS (
-    SELECT DISTINCT ON (v.image_id)
-        v.id
-    FROM image im
-    JOIN version v ON im.current_version_id = v.id
-    WHERE im.indexed_version IS NULL
-       OR im.indexed_version != v.id
-    ORDER BY v.image_id DESC, v.created_at DESC
-    LIMIT 8
-)
+type GetUnindexedImagesRow struct {
+	ImageID   int64 `json:"imageId"`
+	VersionID int64 `json:"versionId"`
+}
+
+func (q *Queries) GetUnindexedImages(ctx context.Context) ([]GetUnindexedImagesRow, error) {
+	rows, err := q.db.Query(ctx, getUnindexedImages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUnindexedImagesRow{}
+	for rows.Next() {
+		var i GetUnindexedImagesRow
+		if err := rows.Scan(&i.ImageID, &i.VersionID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUnindexedVersion = `-- name: GetUnindexedVersion :one
+
 SELECT
     v.id, v.created_at, v.image_id, v.version, v.text, v.rating, v.user_id,
     im.id, im.created_at, im.updated_at, im.deleted_at, im.user_id, im.image_key, im.image_url, im.image_hash, im.active_deletion_id, im.current_version_id, im.indexed_version,
@@ -1078,14 +1108,21 @@ SELECT
         WHERE vt.version_id = v.id AND vt.tag_id = t.id
       )
     )::TEXT[] AS tags
-FROM candidates c
-JOIN version v ON v.id = c.id
-JOIN image im ON im.id = v.image_id
+FROM image im
+JOIN version v ON v.id = im.current_version_id
 JOIN user_identifier ui ON ui.id = im.user_id
-FOR UPDATE OF im SKIP LOCKED
+WHERE im.id = $1
+  AND v.id = $2
+  AND (im.indexed_version IS NULL OR im.indexed_version != v.id)
+FOR UPDATE OF im
 `
 
-type GetUnindexedVersionsRow struct {
+type GetUnindexedVersionParams struct {
+	ImageID   int64 `json:"imageId"`
+	VersionID int64 `json:"versionId"`
+}
+
+type GetUnindexedVersionRow struct {
 	ID        int64            `json:"id"`
 	CreatedAt pgtype.Timestamp `json:"createdAt"`
 	ImageID   int64            `json:"imageId"`
@@ -1100,45 +1137,32 @@ type GetUnindexedVersionsRow struct {
 
 // #######################
 // # Meilisearch indexing
-func (q *Queries) GetUnindexedVersions(ctx context.Context) ([]GetUnindexedVersionsRow, error) {
-	rows, err := q.db.Query(ctx, getUnindexedVersions)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetUnindexedVersionsRow{}
-	for rows.Next() {
-		var i GetUnindexedVersionsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.ImageID,
-			&i.Version,
-			&i.Text,
-			&i.Rating,
-			&i.UserID,
-			&i.Image.ID,
-			&i.Image.CreatedAt,
-			&i.Image.UpdatedAt,
-			&i.Image.DeletedAt,
-			&i.Image.UserID,
-			&i.Image.ImageKey,
-			&i.Image.ImageUrl,
-			&i.Image.ImageHash,
-			&i.Image.ActiveDeletionID,
-			&i.Image.CurrentVersionID,
-			&i.Image.IndexedVersion,
-			&i.Uploader,
-			&i.Tags,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetUnindexedVersion(ctx context.Context, arg GetUnindexedVersionParams) (GetUnindexedVersionRow, error) {
+	row := q.db.QueryRow(ctx, getUnindexedVersion, arg.ImageID, arg.VersionID)
+	var i GetUnindexedVersionRow
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.ImageID,
+		&i.Version,
+		&i.Text,
+		&i.Rating,
+		&i.UserID,
+		&i.Image.ID,
+		&i.Image.CreatedAt,
+		&i.Image.UpdatedAt,
+		&i.Image.DeletedAt,
+		&i.Image.UserID,
+		&i.Image.ImageKey,
+		&i.Image.ImageUrl,
+		&i.Image.ImageHash,
+		&i.Image.ActiveDeletionID,
+		&i.Image.CurrentVersionID,
+		&i.Image.IndexedVersion,
+		&i.Uploader,
+		&i.Tags,
+	)
+	return i, err
 }
 
 const getUploadSession = `-- name: GetUploadSession :one
@@ -1335,7 +1359,7 @@ UPDATE image
 SET current_version_id = new_version.id
 FROM new_version
 WHERE image.id = new_version.image_id
-RETURNING image.id
+RETURNING new_version.id
 `
 
 type InitializeVersionParams struct {

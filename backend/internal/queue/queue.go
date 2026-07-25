@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	TypeHash  = "hash"
-	TypeIndex = "ms-index"
+	TypeHash           = "hash"
+	TypeIndex          = "ms-index"
+	TypeIndexReconcile = "ms-index-reconcile"
 )
 
 var (
@@ -37,13 +38,14 @@ func Init() error {
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(TypeHash, HandleHashTask)
 	mux.HandleFunc(TypeIndex, HandleIndexTask)
+	mux.HandleFunc(TypeIndexReconcile, HandleIndexReconcileTask)
 
 	if err := server.Start(mux); err != nil {
 		_ = client.Close()
 		return err
 	}
 
-	if _, err := scheduler.Register("@every 3s", NewIndexTask()); err != nil {
+	if _, err := scheduler.Register("@every 1m", NewIndexReconcileTask()); err != nil {
 		shutdown()
 		return err
 	}
@@ -53,7 +55,7 @@ func Init() error {
 		return err
 	}
 
-	_, err := client.EnqueueContext(context.Background(), NewIndexTask())
+	_, err := client.EnqueueContext(context.Background(), NewIndexReconcileTask())
 	if err != nil {
 		shutdown()
 	}

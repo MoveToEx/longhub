@@ -65,7 +65,7 @@ UPDATE image
 SET current_version_id = new_version.id
 FROM new_version
 WHERE image.id = new_version.image_id
-RETURNING image.id;
+RETURNING new_version.id;
 
 -- name: GetImagesByUser :many
 SELECT
@@ -98,9 +98,9 @@ JOIN image_version iv ON EXISTS (
 -- name: GetTagsByVersion :many
 SELECT tag.name FROM tag
 INNER JOIN version_tag ON version_tag.tag_id = tag.id
-WHERE version_tag.tag_id = $1;
+WHERE version_tag.version_id = $1;
 
--- name: CreateNewVersion :exec
+-- name: CreateNewVersion :one
 WITH new_version AS (
     INSERT INTO version("text", "rating", "user_id", "image_id", "version")
     SELECT $1, $2, $3, image.id, version.version + 1
@@ -114,11 +114,14 @@ new_image AS (
     SET current_version_id = nv.id
     FROM new_version nv
     WHERE image.id = @image_id
+),
+new_version_tags AS (
+    INSERT INTO version_tag (version_id, tag_id)
+    SELECT nv.id, t.id
+    FROM new_version nv
+    JOIN tag t ON t.name = ANY(@tag_names::TEXT[])
 )
-INSERT INTO version_tag (version_id, tag_id)
-SELECT nv.id, t.id
-FROM new_version nv
-JOIN tag t ON t.name = ANY(@tag_names::TEXT[]);
+SELECT id FROM new_version;
 
 -- name: CreateTags :exec
 INSERT INTO tag ("name")
@@ -323,17 +326,7 @@ LIMIT $2;
 -- #######################
 -- # Meilisearch indexing
 
--- name: GetUnindexedVersions :many
-WITH candidates AS (
-    SELECT DISTINCT ON (v.image_id)
-        v.id
-    FROM image im
-    JOIN version v ON im.current_version_id = v.id
-    WHERE im.indexed_version IS NULL
-       OR im.indexed_version != v.id
-    ORDER BY v.image_id DESC, v.created_at DESC
-    LIMIT 8
-)
+-- name: GetUnindexedVersion :one
 SELECT
     v.*,
     sqlc.embed(im),
@@ -346,16 +339,27 @@ SELECT
         WHERE vt.version_id = v.id AND vt.tag_id = t.id
       )
     )::TEXT[] AS tags
-FROM candidates c
-JOIN version v ON v.id = c.id
-JOIN image im ON im.id = v.image_id
+FROM image im
+JOIN version v ON v.id = im.current_version_id
 JOIN user_identifier ui ON ui.id = im.user_id
-FOR UPDATE OF im SKIP LOCKED;
+WHERE im.id = @image_id
+  AND v.id = @version_id
+  AND (im.indexed_version IS NULL OR im.indexed_version != v.id)
+FOR UPDATE OF im;
 
--- name: CommitUnindexedVersions :exec
+-- name: CommitUnindexedVersion :exec
 UPDATE image
-SET indexed_version = $2
-WHERE id = $1;
+SET indexed_version = @version_id
+WHERE id = @image_id
+  AND current_version_id = @version_id;
+
+-- name: GetUnindexedImages :many
+SELECT im.id AS image_id, v.id AS version_id
+FROM image im
+JOIN version v ON v.id = im.current_version_id
+WHERE im.indexed_version IS NULL OR im.indexed_version != v.id
+ORDER BY im.id
+LIMIT 100;
 
 -- name: GetImagesByIds :many
 SELECT v.text, v.rating, im.id, im.image_url, ARRAY(
