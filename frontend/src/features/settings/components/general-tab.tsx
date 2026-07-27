@@ -54,12 +54,9 @@ function CopyMode() {
         </SelectContent>
       </Select>
       <FieldDescription>
-        <p>
-          PNG is recommended in most cases, but HTML <b>may</b> allow you to copy GIF into other apps.
-        </p>
-        <p>
-          Auto mode uses HTML only for GIF and PNG for other formats.
-        </p>
+        PNG is recommended in most cases, but HTML <b>may</b> allow you to copy GIF into other apps.
+        <br />
+        Auto mode uses HTML only for GIF and PNG for other formats.
       </FieldDescription>
     </Field>
   )
