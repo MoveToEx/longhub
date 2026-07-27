@@ -2,6 +2,7 @@ package routes
 
 import (
 	"long/internal/handlers"
+	userHandlers "long/internal/handlers/user"
 	"long/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -16,8 +17,8 @@ func RegisterRoutes(r *gin.Engine) {
 		public.POST("/auth/register", handlers.RegisterRoute)
 		public.GET("/image/:id", handlers.GetImage)
 		public.GET("/image/:id/version", handlers.GetImageVersions)
-		public.GET("/user/:id/contribution", handlers.GetUserContribution)
-		public.GET("/user/:id", handlers.GetUser)
+		public.GET("/user/:id/contribution", userHandlers.GetUserContribution)
+		public.GET("/user/:id", userHandlers.GetUser)
 		public.GET("/tag/autocomplete", handlers.TagAutocomplete)
 	}
 
@@ -28,7 +29,7 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.POST("/image/sign", handlers.CreateUploadSession)
 		protected.POST("/image/ack", handlers.AcknowledgeSession)
 		protected.PATCH("/image/:id", handlers.UpdateImage)
-		protected.GET("/user", handlers.GetSelf)
+		protected.GET("/user", userHandlers.GetSelf)
 
 		// Favorite
 		protected.GET("/favorite", handlers.GetFavorites)
@@ -40,17 +41,21 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.GET("/recommend", handlers.GetRecommendedTags)
 
 		// WebAuthn
-		protected.GET("/user/webauthn", handlers.GetPasskey)
-		protected.POST("/user/webauthn/new", handlers.BeginAddPasskey)
-		protected.POST("/user/webauthn/validate", handlers.ValidateAddPasskey)
-		protected.PATCH("/user/webauthn/:id", handlers.EditPasskey)
-		protected.DELETE("/user/webauthn/:id", handlers.DeletePasskey)
+		protected.GET("/user/webauthn", userHandlers.GetPasskey)
+		protected.POST("/user/webauthn/new", userHandlers.BeginAddPasskey)
+		protected.POST("/user/webauthn/validate", userHandlers.ValidateAddPasskey)
+		protected.PATCH("/user/webauthn/:id", userHandlers.EditPasskey)
+		protected.DELETE("/user/webauthn/:id", userHandlers.DeletePasskey)
 
 		// Integration
-		protected.POST("/user/appkey", handlers.CreateAppKey)
-		protected.PATCH("/user/appkey/:id", handlers.EditAppKey)
-		protected.DELETE("/user/appkey/:id", handlers.DeleteAppKey)
-		protected.GET("/user/appkey", handlers.GetAppKey)
+		protected.POST("/user/appkey", userHandlers.CreateAppKey)
+		protected.PATCH("/user/appkey/:id", userHandlers.EditAppKey)
+		protected.DELETE("/user/appkey/:id", userHandlers.DeleteAppKey)
+		protected.GET("/user/appkey", userHandlers.GetAppKey)
+		protected.GET("/user/webhook", userHandlers.ListWebhooks)
+		protected.POST("/user/webhook", userHandlers.CreateWebhook)
+		protected.PATCH("/user/webhook/:id", userHandlers.EditWebhook)
+		protected.DELETE("/user/webhook/:id", userHandlers.DeleteWebhook)
 	}
 
 	optional := r.Group("/")
@@ -60,7 +65,7 @@ func RegisterRoutes(r *gin.Engine) {
 		optional.POST("/image/search", handlers.SearchImages)
 		optional.GET("/image", handlers.ListImages)
 		protected.GET("/tag/random/:name", handlers.GetRandomImagesByTag)
-		optional.GET("/user/:id/image", handlers.ListImagesByUser)
+		optional.GET("/user/:id/image", userHandlers.ListImagesByUser)
 	}
 
 }

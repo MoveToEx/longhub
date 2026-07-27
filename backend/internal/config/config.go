@@ -24,7 +24,6 @@ import (
 
 type JWTConfig struct {
 	PrivateKey ed25519.PrivateKey
-	PublicKey  ed25519.PublicKey
 	Issuer     string
 	Audience   string
 	SessionTTL int
@@ -44,6 +43,11 @@ type WebAuthnConfig struct {
 	RPOrigins     []string
 }
 
+type WebhookConfig struct {
+	PrivateKey ed25519.PrivateKey
+	Endpoint   string
+}
+
 type Config struct {
 	DatabaseURL    string
 	ValkeyAddr     string
@@ -53,6 +57,7 @@ type Config struct {
 	JWT            JWTConfig
 	S3             S3Config
 	WebAuthn       WebAuthnConfig
+	Webhook        WebhookConfig
 }
 
 var config Config
@@ -74,28 +79,6 @@ func mustParsePrivateKey(s string) ed25519.PrivateKey {
 
 	if !ok {
 		panic("Private key is not an ED25519 private key")
-	}
-
-	return result
-}
-
-func mustParsePublicKey(s string) ed25519.PublicKey {
-	bytes, err := base64.StdEncoding.DecodeString(s)
-
-	if err != nil {
-		panic("Failed when decoding public key from base64")
-	}
-
-	key, err := x509.ParsePKIXPublicKey(bytes)
-
-	if err != nil {
-		panic("Unrecognized public key")
-	}
-
-	result, ok := key.(ed25519.PublicKey)
-
-	if !ok {
-		panic("Private key is not an ED25519 public key")
 	}
 
 	return result
@@ -125,10 +108,13 @@ func Init() {
 		MeiliSearchKey: os.Getenv("MEILISEARCH_KEY"),
 		JWT: JWTConfig{
 			PrivateKey: mustParsePrivateKey(os.Getenv("JWT_SECRET_KEY")),
-			PublicKey:  mustParsePublicKey(os.Getenv("JWT_PUBLIC_KEY")),
 			Issuer:     os.Getenv("JWT_ISSUER"),
 			Audience:   os.Getenv("JWT_AUDIENCE"),
 			SessionTTL: 72,
+		},
+		Webhook: WebhookConfig{
+			PrivateKey: mustParsePrivateKey(os.Getenv("WEBHOOK_PRIVATE_KEY")),
+			Endpoint:   os.Getenv("WEBHOOK_ENDPOINT"),
 		},
 		S3: S3Config{
 			Endpoint:        os.Getenv("S3_ENDPOINT"),

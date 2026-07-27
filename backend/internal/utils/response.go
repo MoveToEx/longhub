@@ -18,6 +18,13 @@ func ErrorResponse(c *gin.Context, status int, format string, args ...any) {
 	})
 }
 
+func CreatedResponse(c *gin.Context, data any) {
+	c.JSON(201, Response{
+		Error: nil,
+		Data:  data,
+	})
+}
+
 func SuccessResponse(c *gin.Context, data any) {
 	if data == nil {
 		c.JSON(204, nil)

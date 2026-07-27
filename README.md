@@ -2,6 +2,24 @@
 
 ## Deploy
 
+Before deploying, a Cloudflare Worker is required to send outbound requests from Webhooks.
+
+```sh
+$ cd worker
+$ npm install
+$ npx wrangler deploy -e=prod   # change in local
+$ npx wrangler secret put SERVER_PUBLIC_KEY -e=prod
+# paste webhook public key, see below
+```
+
+To generate keypairs (including webhook key and jwt key), run `cmd/setup`:
+```sh
+$ cd backend
+$ go run ./cmd/setup
+```
+
+A `.env` file will be created from `.env.template` with randomly generated keys.
+
 ### Docker
 
 ```sh
@@ -41,10 +59,15 @@ $ yarn dev
 
 ### (in another terminal)
 $ cd backend
-$ cp .env.template .env
+$ go run ./cmd/setup
 $ vim .env
 $ goose up
 $ go mod download
 $ go build
 $ ./long
 ```
+
+# TODO
+
+- [ ] Admin panels based on GraphQL
+- [ ]

@@ -73,6 +73,27 @@ func (q *Queries) CompleteUploadSession(ctx context.Context, arg CompleteUploadS
 	return i, err
 }
 
+const countAvailableWebhooks = `-- name: CountAvailableWebhooks :one
+
+
+SELECT COUNT(*) FROM webhook
+WHERE active = TRUE AND failure_count < $1 AND event_types & $2::BIGINT != 0
+`
+
+type CountAvailableWebhooksParams struct {
+	FailureCount int32 `json:"failureCount"`
+	EventType    int64 `json:"eventType"`
+}
+
+// #endregion
+// #region Webhook
+func (q *Queries) CountAvailableWebhooks(ctx context.Context, arg CountAvailableWebhooksParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAvailableWebhooks, arg.FailureCount, arg.EventType)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countFavoriteImages = `-- name: CountFavoriteImages :one
 SELECT COUNT(*)
 FROM user_favorite
@@ -129,6 +150,18 @@ WHERE user_id = $1
 
 func (q *Queries) CountVersionsByUser(ctx context.Context, userID int64) (int64, error) {
 	row := q.db.QueryRow(ctx, countVersionsByUser, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countWebhooksByUser = `-- name: CountWebhooksByUser :one
+SELECT COUNT(*) FROM webhook
+WHERE user_id = $1
+`
+
+func (q *Queries) CountWebhooksByUser(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countWebhooksByUser, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -355,6 +388,16 @@ func (q *Queries) DeletePasskey(ctx context.Context, arg DeletePasskeyParams) er
 	return err
 }
 
+const deleteWebhook = `-- name: DeleteWebhook :exec
+DELETE FROM webhook
+WHERE id = $1
+`
+
+func (q *Queries) DeleteWebhook(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteWebhook, id)
+	return err
+}
+
 const getAppKey = `-- name: GetAppKey :one
 SELECT id, label, created_at, user_id, permission, last_activated_at, key FROM appkey
 WHERE key = $1
@@ -438,12 +481,13 @@ func (q *Queries) GetAppKeysByUser(ctx context.Context, userID int64) ([]GetAppK
 
 const getCredentials = `-- name: GetCredentials :many
 
+
 SELECT id, name, user_id, public_key, sign_count, transports, flags, created_at, aaguid FROM webauthn_passkey
 WHERE user_id = $1
 `
 
-// ###################
-// # WebAuthn
+// #endregion
+// #region WebAuthn
 func (q *Queries) GetCredentials(ctx context.Context, userID int64) ([]WebauthnPasskey, error) {
 	rows, err := q.db.Query(ctx, getCredentials, userID)
 	if err != nil {
@@ -587,8 +631,7 @@ type GetFavoriteStateParams struct {
 	ImageID int64 `json:"imageId"`
 }
 
-// ###################
-// # Favorite
+// #region Favorite
 func (q *Queries) GetFavoriteState(ctx context.Context, arg GetFavoriteStateParams) (UserFavorite, error) {
 	row := q.db.QueryRow(ctx, getFavoriteState, arg.UserID, arg.ImageID)
 	var i UserFavorite
@@ -1096,6 +1139,7 @@ func (q *Queries) GetUnindexedImages(ctx context.Context) ([]GetUnindexedImagesR
 
 const getUnindexedVersion = `-- name: GetUnindexedVersion :one
 
+
 SELECT
     v.id, v.created_at, v.image_id, v.version, v.text, v.rating, v.user_id,
     im.id, im.created_at, im.updated_at, im.deleted_at, im.user_id, im.image_key, im.image_url, im.image_hash, im.active_deletion_id, im.current_version_id, im.indexed_version,
@@ -1135,8 +1179,8 @@ type GetUnindexedVersionRow struct {
 	Tags      []string         `json:"tags"`
 }
 
-// #######################
-// # Meilisearch indexing
+// #endregion
+// #region Meilisearch indexing
 func (q *Queries) GetUnindexedVersion(ctx context.Context, arg GetUnindexedVersionParams) (GetUnindexedVersionRow, error) {
 	row := q.db.QueryRow(ctx, getUnindexedVersion, arg.ImageID, arg.VersionID)
 	var i GetUnindexedVersionRow
@@ -1207,6 +1251,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 
 const getUserByAppKey = `-- name: GetUserByAppKey :one
 
+
 SELECT u.id, u.created_at, u.email, u.username, u.permission, u.password_hash, u.handle, u.preference, k.id AS key_id, k.permission AS key_permission FROM public.user u
 INNER JOIN appkey k ON u.id = k.user_id
 WHERE k.key = $1
@@ -1225,8 +1270,8 @@ type GetUserByAppKeyRow struct {
 	KeyPermission int64            `json:"keyPermission"`
 }
 
-// ###################
-// # Integration
+// #endregion
+// #region Appkey
 func (q *Queries) GetUserByAppKey(ctx context.Context, key string) (GetUserByAppKeyRow, error) {
 	row := q.db.QueryRow(ctx, getUserByAppKey, key)
 	var i GetUserByAppKeyRow
@@ -1344,6 +1389,163 @@ func (q *Queries) GetUserContribution(ctx context.Context, userID int64) ([]GetU
 	return items, nil
 }
 
+const getWebhook = `-- name: GetWebhook :one
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
+WHERE id = $1
+`
+
+func (q *Queries) GetWebhook(ctx context.Context, id int64) (Webhook, error) {
+	row := q.db.QueryRow(ctx, getWebhook, id)
+	var i Webhook
+	err := row.Scan(
+		&i.ID,
+		&i.Active,
+		&i.CreatedAt,
+		&i.UserID,
+		&i.EventTypes,
+		&i.Label,
+		&i.Endpoint,
+		&i.Secret,
+		&i.LastActivatedAt,
+		&i.LastResponseStatus,
+		&i.FailureCount,
+	)
+	return i, err
+}
+
+const getWebhooks = `-- name: GetWebhooks :many
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
+WHERE active = TRUE AND failure_count < $3
+ORDER BY id ASC
+LIMIT $1 OFFSET $2
+`
+
+type GetWebhooksParams struct {
+	Limit        int32 `json:"limit"`
+	Offset       int32 `json:"offset"`
+	FailureCount int32 `json:"failureCount"`
+}
+
+func (q *Queries) GetWebhooks(ctx context.Context, arg GetWebhooksParams) ([]Webhook, error) {
+	rows, err := q.db.Query(ctx, getWebhooks, arg.Limit, arg.Offset, arg.FailureCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Webhook{}
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.ID,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.EventTypes,
+			&i.Label,
+			&i.Endpoint,
+			&i.Secret,
+			&i.LastActivatedAt,
+			&i.LastResponseStatus,
+			&i.FailureCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWebhooksByEvent = `-- name: GetWebhooksByEvent :many
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
+WHERE event_types & $4::BIGINT != 0 AND active = TRUE and failure_count < $1
+ORDER BY id ASC
+LIMIT $2 OFFSET $3
+`
+
+type GetWebhooksByEventParams struct {
+	FailureCount int32 `json:"failureCount"`
+	Limit        int32 `json:"limit"`
+	Offset       int32 `json:"offset"`
+	EventType    int64 `json:"eventType"`
+}
+
+func (q *Queries) GetWebhooksByEvent(ctx context.Context, arg GetWebhooksByEventParams) ([]Webhook, error) {
+	rows, err := q.db.Query(ctx, getWebhooksByEvent,
+		arg.FailureCount,
+		arg.Limit,
+		arg.Offset,
+		arg.EventType,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Webhook{}
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.ID,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.EventTypes,
+			&i.Label,
+			&i.Endpoint,
+			&i.Secret,
+			&i.LastActivatedAt,
+			&i.LastResponseStatus,
+			&i.FailureCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWebhooksByUser = `-- name: GetWebhooksByUser :many
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
+WHERE user_id = $1
+`
+
+func (q *Queries) GetWebhooksByUser(ctx context.Context, userID int64) ([]Webhook, error) {
+	rows, err := q.db.Query(ctx, getWebhooksByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Webhook{}
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.ID,
+			&i.Active,
+			&i.CreatedAt,
+			&i.UserID,
+			&i.EventTypes,
+			&i.Label,
+			&i.Endpoint,
+			&i.Secret,
+			&i.LastActivatedAt,
+			&i.LastResponseStatus,
+			&i.FailureCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const initializeVersion = `-- name: InitializeVersion :one
 WITH new_version AS (
     INSERT INTO version(text, rating, image_id, user_id)
@@ -1446,6 +1648,45 @@ func (q *Queries) MarkUploadSessionAsExpired(ctx context.Context, id int64) erro
 	return err
 }
 
+const newWebhook = `-- name: NewWebhook :one
+INSERT INTO webhook(user_id, label, endpoint, event_types, secret)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count
+`
+
+type NewWebhookParams struct {
+	UserID     int64  `json:"userId"`
+	Label      string `json:"label"`
+	Endpoint   string `json:"endpoint"`
+	EventTypes int64  `json:"eventTypes"`
+	Secret     string `json:"secret"`
+}
+
+func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook, error) {
+	row := q.db.QueryRow(ctx, newWebhook,
+		arg.UserID,
+		arg.Label,
+		arg.Endpoint,
+		arg.EventTypes,
+		arg.Secret,
+	)
+	var i Webhook
+	err := row.Scan(
+		&i.ID,
+		&i.Active,
+		&i.CreatedAt,
+		&i.UserID,
+		&i.EventTypes,
+		&i.Label,
+		&i.Endpoint,
+		&i.Secret,
+		&i.LastActivatedAt,
+		&i.LastResponseStatus,
+		&i.FailureCount,
+	)
+	return i, err
+}
+
 const quickSearchFavorites = `-- name: QuickSearchFavorites :many
 WITH current_version AS (
   SELECT DISTINCT ON (image_id)
@@ -1505,6 +1746,38 @@ func (q *Queries) QuickSearchFavorites(ctx context.Context, arg QuickSearchFavor
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordWebhookFailure = `-- name: RecordWebhookFailure :exec
+UPDATE webhook
+SET failure_count = failure_count + 1, last_response_status = $2, last_activated_at = NOW()
+WHERE id = $1
+`
+
+type RecordWebhookFailureParams struct {
+	ID                 int64       `json:"id"`
+	LastResponseStatus pgtype.Int4 `json:"lastResponseStatus"`
+}
+
+func (q *Queries) RecordWebhookFailure(ctx context.Context, arg RecordWebhookFailureParams) error {
+	_, err := q.db.Exec(ctx, recordWebhookFailure, arg.ID, arg.LastResponseStatus)
+	return err
+}
+
+const recordWebhookSuccess = `-- name: RecordWebhookSuccess :exec
+UPDATE webhook
+SET last_response_status = $2, last_activated_at = NOW()
+WHERE id = $1
+`
+
+type RecordWebhookSuccessParams struct {
+	ID                 int64       `json:"id"`
+	LastResponseStatus pgtype.Int4 `json:"lastResponseStatus"`
+}
+
+func (q *Queries) RecordWebhookSuccess(ctx context.Context, arg RecordWebhookSuccessParams) error {
+	_, err := q.db.Exec(ctx, recordWebhookSuccess, arg.ID, arg.LastResponseStatus)
+	return err
 }
 
 const setFavoriteShortcut = `-- name: SetFavoriteShortcut :exec
@@ -1636,5 +1909,30 @@ WHERE id = $1
 
 func (q *Queries) UpdateAppKeyUsedDate(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, updateAppKeyUsedDate, id)
+	return err
+}
+
+const updateWebhook = `-- name: UpdateWebhook :exec
+UPDATE webhook
+SET label = $1, endpoint = $2, event_types = $3, secret = $4
+WHERE id = $5
+`
+
+type UpdateWebhookParams struct {
+	Label      string `json:"label"`
+	Endpoint   string `json:"endpoint"`
+	EventTypes int64  `json:"eventTypes"`
+	Secret     string `json:"secret"`
+	ID         int64  `json:"id"`
+}
+
+func (q *Queries) UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) error {
+	_, err := q.db.Exec(ctx, updateWebhook,
+		arg.Label,
+		arg.Endpoint,
+		arg.EventTypes,
+		arg.Secret,
+		arg.ID,
+	)
 	return err
 }

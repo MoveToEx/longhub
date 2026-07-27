@@ -252,8 +252,7 @@ FULL OUTER JOIN version_daily v
   ON v.day = i.day
 ORDER BY i.day;
 
--- ###################
--- # Favorite
+--#region Favorite
 
 -- name: GetFavoriteState :one
 SELECT * FROM user_favorite
@@ -322,9 +321,9 @@ GROUP BY t.id
 ORDER BY count DESC
 LIMIT $2;
 
+--#endregion
 
--- #######################
--- # Meilisearch indexing
+--#region Meilisearch indexing
 
 -- name: GetUnindexedVersion :one
 SELECT
@@ -375,8 +374,9 @@ WHERE im.id = ANY(@ids::BIGINT[])
   AND im.deleted_at IS NULL
 ORDER BY ARRAY_POSITION(@ids::BIGINT[], im.id);
 
--- ###################
--- # WebAuthn
+--#endregion
+
+--#region WebAuthn
 
 -- name: GetCredentials :many
 SELECT * FROM webauthn_passkey
@@ -403,8 +403,9 @@ UPDATE webauthn_passkey
 SET name = $1
 WHERE id = $2 AND user_id = $3;
 
--- ###################
--- # Integration
+--#endregion
+
+--#region Appkey
 
 -- name: GetUserByAppKey :one
 SELECT u.*, k.id AS key_id, k.permission AS key_permission FROM public.user u
@@ -442,3 +443,60 @@ UPDATE appkey
 SET last_activated_at = NOW()
 WHERE id = $1;
 
+--#endregion
+
+--#region Webhook
+
+-- name: CountAvailableWebhooks :one
+SELECT COUNT(*) FROM webhook
+WHERE active = TRUE AND failure_count < $1 AND event_types & @event_type::BIGINT != 0;
+
+-- name: GetWebhook :one
+SELECT * FROM webhook
+WHERE id = $1;
+
+-- name: GetWebhooksByUser :many
+SELECT * FROM webhook
+WHERE user_id = $1;
+
+-- name: RecordWebhookFailure :exec
+UPDATE webhook
+SET failure_count = failure_count + 1, last_response_status = $2, last_activated_at = NOW()
+WHERE id = $1;
+
+-- name: RecordWebhookSuccess :exec
+UPDATE webhook
+SET last_response_status = $2, last_activated_at = NOW()
+WHERE id = $1;
+
+-- name: CountWebhooksByUser :one
+SELECT COUNT(*) FROM webhook
+WHERE user_id = $1;
+
+-- name: NewWebhook :one
+INSERT INTO webhook(user_id, label, endpoint, event_types, secret)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: DeleteWebhook :exec
+DELETE FROM webhook
+WHERE id = $1;
+
+-- name: UpdateWebhook :exec
+UPDATE webhook
+SET label = $1, endpoint = $2, event_types = $3, secret = $4
+WHERE id = $5;
+
+-- name: GetWebhooks :many
+SELECT * FROM webhook
+WHERE active = TRUE AND failure_count < $3
+ORDER BY id ASC
+LIMIT $1 OFFSET $2;
+
+-- name: GetWebhooksByEvent :many
+SELECT * FROM webhook
+WHERE event_types & @event_type::BIGINT != 0 AND active = TRUE and failure_count < $1
+ORDER BY id ASC
+LIMIT $2 OFFSET $3;
+
+--#endregion

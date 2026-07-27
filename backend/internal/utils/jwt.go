@@ -39,7 +39,7 @@ func ParseToken(s string) (*Claims, error) {
 		s,
 		claims,
 		func(t *jwt.Token) (any, error) {
-			return config.GetConfig().JWT.PublicKey, nil
+			return config.GetConfig().JWT.PrivateKey.Public(), nil
 		},
 		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}),
 		jwt.WithAudience(config.GetConfig().JWT.Audience),

@@ -49,7 +49,8 @@ func main() {
 
 	app := gin.New()
 
-	app.Use(gin.Recovery(), middleware.CORSMiddleware(config.GetConfig().CORSOrigin))
+	app.Use(gin.Recovery())
+	app.Use(middleware.CORSMiddleware(config.GetConfig().CORSOrigin))
 
 	routes.RegisterRoutes(app)
 

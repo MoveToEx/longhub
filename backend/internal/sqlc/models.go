@@ -247,12 +247,14 @@ type WebauthnPasskey struct {
 
 type Webhook struct {
 	ID                 int64            `json:"id"`
+	Active             bool             `json:"active"`
 	CreatedAt          pgtype.Timestamp `json:"createdAt"`
 	UserID             int64            `json:"userId"`
+	EventTypes         int64            `json:"eventTypes"`
 	Label              string           `json:"label"`
 	Endpoint           string           `json:"endpoint"`
-	Event              int32            `json:"event"`
 	Secret             string           `json:"secret"`
 	LastActivatedAt    pgtype.Timestamp `json:"lastActivatedAt"`
 	LastResponseStatus pgtype.Int4      `json:"lastResponseStatus"`
+	FailureCount       int32            `json:"failureCount"`
 }

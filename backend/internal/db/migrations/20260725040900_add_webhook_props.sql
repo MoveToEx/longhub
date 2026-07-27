@@ -1,0 +1,26 @@
+-- +goose Up
+SELECT 'up SQL query';
+
+ALTER TABLE webhook
+ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE webhook
+ADD COLUMN event_types BIGINT NOT NULL DEFAULT 0;
+
+ALTER TABLE webhook
+DROP COLUMN event;
+
+-- +goose Down
+SELECT 'down SQL query';
+
+ALTER TABLE webhook
+DROP COLUMN active;
+
+ALTER TABLE webhook
+DROP COLUMN event_types;
+
+ALTER TABLE webhook
+ADD COLUMN event INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE webhook
+ALTER COLUMN event DROP DEFAULT;

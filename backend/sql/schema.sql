@@ -125,14 +125,16 @@ CREATE TABLE IF NOT EXISTS "appkey" (
 
 CREATE TABLE IF NOT EXISTS "webhook" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,
+	"active" BOOLEAN NOT NULL DEFAULT TRUE,
 	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
 	"user_id" BIGINT NOT NULL,
+	"event_types" BIGINT NOT NULL DEFAULT 0,
 	"label" TEXT NOT NULL,
 	"endpoint" TEXT NOT NULL,
-	"event" INTEGER NOT NULL,
 	"secret" TEXT NOT NULL,
 	"last_activated_at" TIMESTAMP,
 	"last_response_status" INTEGER,
+	"failure_count" INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY("id")
 );
 

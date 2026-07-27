@@ -13,6 +13,8 @@ const (
 	TypeHash           = "hash"
 	TypeIndex          = "ms-index"
 	TypeIndexReconcile = "ms-index-reconcile"
+	TypeDispatch       = "webhook-dispatch"
+	TypeInvoke         = "webhook-invoke"
 )
 
 var (
@@ -30,6 +32,7 @@ func Init() error {
 	client = asynq.NewClient(opt)
 	server = asynq.NewServer(opt, asynq.Config{
 		Concurrency: 100,
+		// LogLevel:    asynq.DebugLevel,
 	})
 	scheduler = asynq.NewScheduler(opt, &asynq.SchedulerOpts{
 		Location: time.Local,
@@ -38,6 +41,8 @@ func Init() error {
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(TypeHash, HandleHashTask)
 	mux.HandleFunc(TypeIndex, HandleIndexTask)
+	mux.HandleFunc(TypeDispatch, HandleDispatchTask)
+	mux.HandleFunc(TypeInvoke, HandleInvokeTask)
 	mux.HandleFunc(TypeIndexReconcile, HandleIndexReconcileTask)
 
 	if err := server.Start(mux); err != nil {
