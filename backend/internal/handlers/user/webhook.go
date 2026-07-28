@@ -12,12 +12,14 @@ import (
 )
 
 type ListWebhooksResponse struct {
-	Label              string    `json:"label"`
-	EventTypes         int64     `json:"eventTypes"`
-	Endpoint           string    `json:"endpoint"`
-	Active             bool      `json:"active"`
-	LastActivatedAt    time.Time `json:"lastActivatedAt"`
-	LastResponseStatus *int32    `json:"lastResponseStatus"`
+	ID                 int64      `json:"id"`
+	Label              string     `json:"label"`
+	EventTypes         int64      `json:"eventTypes"`
+	Endpoint           string     `json:"endpoint"`
+	Active             bool       `json:"active"`
+	LastActivatedAt    *time.Time `json:"lastActivatedAt"`
+	LastResponseStatus *int32     `json:"lastResponseStatus"`
+	FailureCount       int32      `json:"failureCount"`
 }
 
 func ListWebhooks(c *gin.Context) {
@@ -35,17 +37,23 @@ func ListWebhooks(c *gin.Context) {
 
 	for i := range webhooks {
 		var status *int32 = nil
+		var activatedAt *time.Time = nil
 
 		if webhooks[i].LastResponseStatus.Valid {
 			status = new(webhooks[i].LastResponseStatus.Int32)
 		}
+		if webhooks[i].LastActivatedAt.Valid {
+			activatedAt = new(webhooks[i].LastActivatedAt.Time)
+		}
 		result = append(result, ListWebhooksResponse{
+			ID:                 webhooks[i].ID,
 			Label:              webhooks[i].Label,
 			EventTypes:         webhooks[i].EventTypes,
 			Endpoint:           webhooks[i].Endpoint,
 			Active:             webhooks[i].Active,
-			LastActivatedAt:    webhooks[i].LastActivatedAt.Time,
+			LastActivatedAt:    activatedAt,
 			LastResponseStatus: status,
+			FailureCount:       webhooks[i].FailureCount,
 		})
 	}
 
@@ -57,6 +65,7 @@ type CreateWebhookPayload struct {
 	EventTypes int64  `json:"eventTypes"`
 	Secret     string `json:"secret"`
 	Endpoint   string `json:"endpoint"`
+	Active     bool   `json:"active"`
 }
 
 type CreateWebhookResponse struct {
@@ -92,6 +101,7 @@ func CreateWebhook(c *gin.Context) {
 		Secret:     payload.Secret,
 		EventTypes: payload.EventTypes,
 		Endpoint:   payload.Endpoint,
+		Active:     payload.Active,
 	})
 
 	if err != nil {
@@ -110,6 +120,7 @@ type EditWebhookPayload struct {
 	EventTypes *int64  `json:"eventTypes"`
 	Secret     *string `json:"secret"`
 	Endpoint   *string `json:"endpoint"`
+	Active     bool    `json:"active"`
 }
 
 func EditWebhook(c *gin.Context) {
@@ -148,6 +159,7 @@ func EditWebhook(c *gin.Context) {
 		EventTypes: webhook.EventTypes,
 		Secret:     webhook.Secret,
 		ID:         webhook.ID,
+		Active:     webhook.Active,
 	}
 
 	if payload.Endpoint != nil {
@@ -162,6 +174,7 @@ func EditWebhook(c *gin.Context) {
 	if payload.Secret != nil {
 		args.Secret = *payload.Secret
 	}
+	args.Active = payload.Active
 
 	err = db.Query().UpdateWebhook(ctx, args)
 

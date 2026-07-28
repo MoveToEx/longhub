@@ -1649,8 +1649,8 @@ func (q *Queries) MarkUploadSessionAsExpired(ctx context.Context, id int64) erro
 }
 
 const newWebhook = `-- name: NewWebhook :one
-INSERT INTO webhook(user_id, label, endpoint, event_types, secret)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count
 `
 
@@ -1660,6 +1660,7 @@ type NewWebhookParams struct {
 	Endpoint   string `json:"endpoint"`
 	EventTypes int64  `json:"eventTypes"`
 	Secret     string `json:"secret"`
+	Active     bool   `json:"active"`
 }
 
 func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook, error) {
@@ -1669,6 +1670,7 @@ func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook
 		arg.Endpoint,
 		arg.EventTypes,
 		arg.Secret,
+		arg.Active,
 	)
 	var i Webhook
 	err := row.Scan(
@@ -1750,23 +1752,29 @@ func (q *Queries) QuickSearchFavorites(ctx context.Context, arg QuickSearchFavor
 
 const recordWebhookFailure = `-- name: RecordWebhookFailure :exec
 UPDATE webhook
-SET failure_count = failure_count + 1, last_response_status = $2, last_activated_at = NOW()
+SET failure_count = failure_count + 1,
+    active = CASE WHEN failure_count + 1 >= $3 THEN FALSE ELSE active END,
+    last_response_status = $2,
+    last_activated_at = NOW()
 WHERE id = $1
 `
 
 type RecordWebhookFailureParams struct {
 	ID                 int64       `json:"id"`
 	LastResponseStatus pgtype.Int4 `json:"lastResponseStatus"`
+	FailureCount       int32       `json:"failureCount"`
 }
 
 func (q *Queries) RecordWebhookFailure(ctx context.Context, arg RecordWebhookFailureParams) error {
-	_, err := q.db.Exec(ctx, recordWebhookFailure, arg.ID, arg.LastResponseStatus)
+	_, err := q.db.Exec(ctx, recordWebhookFailure, arg.ID, arg.LastResponseStatus, arg.FailureCount)
 	return err
 }
 
 const recordWebhookSuccess = `-- name: RecordWebhookSuccess :exec
 UPDATE webhook
-SET last_response_status = $2, last_activated_at = NOW()
+SET failure_count = CASE WHEN active THEN 0 ELSE failure_count END,
+    last_response_status = $2,
+    last_activated_at = NOW()
 WHERE id = $1
 `
 
@@ -1914,8 +1922,13 @@ func (q *Queries) UpdateAppKeyUsedDate(ctx context.Context, id int64) error {
 
 const updateWebhook = `-- name: UpdateWebhook :exec
 UPDATE webhook
-SET label = $1, endpoint = $2, event_types = $3, secret = $4
-WHERE id = $5
+SET label = $1,
+    endpoint = $2,
+    event_types = $3,
+    secret = $4,
+    failure_count = CASE WHEN active = FALSE AND $5 = TRUE THEN 0 ELSE failure_count END,
+    active = $5
+WHERE id = $6
 `
 
 type UpdateWebhookParams struct {
@@ -1923,6 +1936,7 @@ type UpdateWebhookParams struct {
 	Endpoint   string `json:"endpoint"`
 	EventTypes int64  `json:"eventTypes"`
 	Secret     string `json:"secret"`
+	Active     bool   `json:"active"`
 	ID         int64  `json:"id"`
 }
 
@@ -1932,6 +1946,7 @@ func (q *Queries) UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) er
 		arg.Endpoint,
 		arg.EventTypes,
 		arg.Secret,
+		arg.Active,
 		arg.ID,
 	)
 	return err

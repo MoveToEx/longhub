@@ -241,15 +241,16 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 	status := res.StatusCode
 
 	if !(status >= 200 && status < 300) {
-		db.Query().RecordWebhookFailure(ctx, sqlc.RecordWebhookFailureParams{
+		return db.Query().RecordWebhookFailure(ctx, sqlc.RecordWebhookFailureParams{
 			ID: args.WebhookID,
 			LastResponseStatus: pgtype.Int4{
 				Valid: true,
 				Int32: int32(status),
 			},
+			FailureCount: WebhookMaxFailures,
 		})
 	} else {
-		db.Query().RecordWebhookSuccess(ctx, sqlc.RecordWebhookSuccessParams{
+		return db.Query().RecordWebhookSuccess(ctx, sqlc.RecordWebhookSuccessParams{
 			ID: args.WebhookID,
 			LastResponseStatus: pgtype.Int4{
 				Valid: true,
@@ -257,5 +258,4 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 			},
 		})
 	}
-	return nil
 }

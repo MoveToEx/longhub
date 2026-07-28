@@ -76,3 +76,14 @@ export type AppKey = {
   permission: number,
   lastActivatedAt: string | null,
 }
+
+export type Webhook = {
+  id: number,
+  label: string,
+  eventTypes: number,
+  endpoint: string,
+  active: boolean,
+  lastActivatedAt: string | null,
+  lastResponseStatus: number | null,
+  failureCount: number,
+}

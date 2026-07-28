@@ -461,12 +461,17 @@ WHERE user_id = $1;
 
 -- name: RecordWebhookFailure :exec
 UPDATE webhook
-SET failure_count = failure_count + 1, last_response_status = $2, last_activated_at = NOW()
+SET failure_count = failure_count + 1,
+    active = CASE WHEN failure_count + 1 >= $3 THEN FALSE ELSE active END,
+    last_response_status = $2,
+    last_activated_at = NOW()
 WHERE id = $1;
 
 -- name: RecordWebhookSuccess :exec
 UPDATE webhook
-SET last_response_status = $2, last_activated_at = NOW()
+SET failure_count = CASE WHEN active THEN 0 ELSE failure_count END,
+    last_response_status = $2,
+    last_activated_at = NOW()
 WHERE id = $1;
 
 -- name: CountWebhooksByUser :one
@@ -474,8 +479,8 @@ SELECT COUNT(*) FROM webhook
 WHERE user_id = $1;
 
 -- name: NewWebhook :one
-INSERT INTO webhook(user_id, label, endpoint, event_types, secret)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: DeleteWebhook :exec
@@ -484,8 +489,13 @@ WHERE id = $1;
 
 -- name: UpdateWebhook :exec
 UPDATE webhook
-SET label = $1, endpoint = $2, event_types = $3, secret = $4
-WHERE id = $5;
+SET label = $1,
+    endpoint = $2,
+    event_types = $3,
+    secret = $4,
+    failure_count = CASE WHEN active = FALSE AND $5 = TRUE THEN 0 ELSE failure_count END,
+    active = $5
+WHERE id = $6;
 
 -- name: GetWebhooks :many
 SELECT * FROM webhook
