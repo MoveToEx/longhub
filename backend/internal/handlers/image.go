@@ -463,7 +463,8 @@ func UpdateImage(c *gin.Context) {
 }
 
 type SignPayload struct {
-	MIME string `json:"mime"`
+	MIME string `json:"mime" validate:"required"`
+	Size int64  `json:"size" validate:"required,gt=0"`
 }
 
 type SignResponse struct {
@@ -484,6 +485,11 @@ func CreateUploadSession(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		utils.ErrorResponse(c, 400, "Invalid request")
+		return
+	}
+
+	if payload.Size > 4*1024*1024 {
+		utils.ErrorResponse(c, 400, "Image too large, try compressing")
 		return
 	}
 
@@ -509,9 +515,10 @@ func CreateUploadSession(c *gin.Context) {
 	key = key + ext[0]
 
 	req, err := presigner.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(config.GetConfig().S3.BucketName),
-		Key:         aws.String(key),
-		ContentType: aws.String(payload.MIME),
+		Bucket:        aws.String(config.GetConfig().S3.BucketName),
+		Key:           aws.String(key),
+		ContentType:   aws.String(payload.MIME),
+		ContentLength: aws.Int64(payload.Size),
 	})
 
 	if err != nil {

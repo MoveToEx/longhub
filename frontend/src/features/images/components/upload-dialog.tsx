@@ -63,7 +63,8 @@ export default function UploadDialog() {
 
     try {
       let response = await api.post<Wrapped<SignResponse>>('/image/sign', {
-        mime: file.type
+        mime: file.type,
+        size: file.size,
       });
 
       const { sessionId, url } = response.data.data;
