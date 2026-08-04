@@ -170,7 +170,7 @@ func HandleDispatchTask(ctx context.Context, task *asynq.Task) error {
 	}
 
 	if args.Offset+WebhookBatchSize < int32(count) {
-		task, err := NewDispatchTask(args.ID, args.Offset, args.EventType)
+		task, err := NewDispatchTask(args.ID, args.Offset+WebhookBatchSize, args.EventType)
 		if err != nil {
 			return err
 		}
