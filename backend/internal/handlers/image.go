@@ -455,7 +455,7 @@ func UpdateImage(c *gin.Context) {
 		fmt.Printf("Failed when scheduling image %d version %d for indexing: %v", imageID, versionID, err)
 	}
 
-	if err := queue.EnqueueDispatch(ctx, imageID, db.WebhookUpdateEvent); err != nil {
+	if err := queue.EnqueueDispatch(ctx, imageID, versionID, db.WebhookUpdateEvent); err != nil {
 		fmt.Printf("Failed when enqueueing webhook dispatch for image %d: %v", imageID, err)
 	}
 
@@ -637,7 +637,7 @@ func AcknowledgeSession(c *gin.Context) {
 		log.Printf("Failed when scheduling image %d version %d for indexing: %v", id, versionID, err)
 	}
 
-	if err := queue.EnqueueDispatch(ctx, id, db.WebhookCreationEvent); err != nil {
+	if err := queue.EnqueueDispatch(ctx, id, versionID, db.WebhookCreationEvent); err != nil {
 		log.Printf("Failed when enqueueing webhook dispatch for image %d: %v", id, err)
 	}
 

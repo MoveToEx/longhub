@@ -120,7 +120,7 @@ type EditWebhookPayload struct {
 	EventTypes *int64  `json:"eventTypes"`
 	Secret     *string `json:"secret"`
 	Endpoint   *string `json:"endpoint"`
-	Active     bool    `json:"active"`
+	Active     *bool   `json:"active"`
 }
 
 func EditWebhook(c *gin.Context) {
@@ -174,7 +174,9 @@ func EditWebhook(c *gin.Context) {
 	if payload.Secret != nil {
 		args.Secret = *payload.Secret
 	}
-	args.Active = payload.Active
+	if payload.Active != nil {
+		args.Active = *payload.Active
+	}
 
 	err = db.Query().UpdateWebhook(ctx, args)
 

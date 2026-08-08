@@ -10,7 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log"
 	"long/internal/config"
 	"long/internal/db"
 	"long/internal/sqlc"
@@ -22,14 +22,23 @@ import (
 )
 
 const (
-	WebhookBatchSize   = 100
-	WebhookMaxFailures = 3
+	WebhookBatchSize      = 100
+	WebhookMaxFailures    = 3
+	WebhookRequestTimeout = 30 * time.Second
 )
 
+var webhookHTTPClient = &http.Client{
+	Timeout: WebhookRequestTimeout,
+	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
 type DispatchArgs struct {
-	ID        int64 `json:"id"`
-	Offset    int32 `json:"offset"`
-	EventType int64 `json:"eventType"`
+	ID            int64 `json:"id"`
+	VersionID     int64 `json:"version"`
+	LastWebhookID int64 `json:"lastWebhookId"`
+	EventType     int64 `json:"eventType"`
 }
 
 type RequestBody struct {
@@ -48,16 +57,33 @@ type WorkerRequest struct {
 }
 
 type InvokeArgs struct {
-	WebhookID int64  `json:"webhookId"`
-	URL       string `json:"url"`
-	Body      string `json:"body"`
+	WebhookID int64           `json:"webhookId"`
+	ImageID   int64           `json:"imageId"`
+	Version   int32           `json:"version"`
+	Body      json.RawMessage `json:"body"`
 }
 
-func NewDispatchTask(id int64, offset int32, event int64) (*asynq.Task, error) {
+func shouldIgnoreInvocation(currentVersion, dispatchedVersion int32) bool {
+	return currentVersion > dispatchedVersion
+}
+
+func decodeInvokeBody(raw json.RawMessage) ([]byte, error) {
+	if len(raw) > 0 && raw[0] == '"' {
+		var body string
+		if err := json.Unmarshal(raw, &body); err != nil {
+			return nil, err
+		}
+		return []byte(body), nil
+	}
+	return raw, nil
+}
+
+func NewDispatchTask(id, versionID, lastWebhookID int64, event int64) (*asynq.Task, error) {
 	payload, err := json.Marshal(DispatchArgs{
-		ID:        id,
-		Offset:    offset,
-		EventType: event,
+		ID:            id,
+		VersionID:     versionID,
+		LastWebhookID: lastWebhookID,
+		EventType:     event,
 	})
 	if err != nil {
 		return nil, err
@@ -65,8 +91,8 @@ func NewDispatchTask(id int64, offset int32, event int64) (*asynq.Task, error) {
 	return asynq.NewTask(TypeDispatch, payload), nil
 }
 
-func EnqueueDispatch(ctx context.Context, imageID int64, event int64) error {
-	task, err := NewDispatchTask(imageID, 0, event)
+func EnqueueDispatch(ctx context.Context, imageID, versionID int64, event int64) error {
+	task, err := NewDispatchTask(imageID, versionID, 0, event)
 	if err != nil {
 		return err
 	}
@@ -78,30 +104,34 @@ func EnqueueDispatch(ctx context.Context, imageID int64, event int64) error {
 	return err
 }
 
-func EnqueueInvoke(ctx context.Context, webhookID int64, body RequestBody) error {
-	task, err := NewInvokeTask(webhookID, body)
+func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32, body RequestBody) error {
+	task, err := NewInvokeTask(webhookID, imageID, version, body)
 
 	if err != nil {
 		return err
 	}
 
-	_, err = client.EnqueueContext(ctx, task)
+	_, err = client.EnqueueContext(ctx, task, asynq.Unique(time.Hour))
 
 	if err != nil {
+		if errors.Is(err, asynq.ErrDuplicateTask) {
+			return nil
+		}
 		return err
 	}
-
 	return nil
 }
 
-func NewInvokeTask(id int64, body RequestBody) (*asynq.Task, error) {
-	s, err := json.Marshal(body)
+func NewInvokeTask(id, imageID int64, version int32, body RequestBody) (*asynq.Task, error) {
+	payloadBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	payload, err := json.Marshal(InvokeArgs{
 		WebhookID: id,
-		Body:      string(s),
+		ImageID:   imageID,
+		Version:   version,
+		Body:      payloadBody,
 	})
 	if err != nil {
 		return nil, err
@@ -115,18 +145,9 @@ func HandleDispatchTask(ctx context.Context, task *asynq.Task) error {
 		return err
 	}
 
-	count, err := db.Query().CountAvailableWebhooks(ctx, sqlc.CountAvailableWebhooksParams{
-		FailureCount: WebhookMaxFailures,
-		EventType:    args.EventType,
-	})
-
-	if err != nil {
-		return err
-	}
-
 	webhooks, err := db.Query().GetWebhooksByEvent(ctx, sqlc.GetWebhooksByEventParams{
-		Offset:       args.Offset,
-		Limit:        WebhookBatchSize,
+		AfterID:      args.LastWebhookID,
+		PageLimit:    WebhookBatchSize,
 		FailureCount: WebhookMaxFailures,
 		EventType:    args.EventType,
 	})
@@ -135,49 +156,43 @@ func HandleDispatchTask(ctx context.Context, task *asynq.Task) error {
 		return err
 	}
 
-	image, err := db.Query().GetImage(ctx, args.ID)
+	image, err := db.Query().GetImageVersionForWebhook(ctx, sqlc.GetImageVersionForWebhookParams{
+		ImageID:   args.ID,
+		VersionID: args.VersionID,
+	})
 
 	if err != nil {
 		return err
-	}
-
-	tags, err := db.Query().GetTagsByImage(ctx, image.ID)
-
-	if err != nil {
-		return err
-	}
-
-	names := []string{}
-
-	for i := range tags {
-		names = append(names, tags[i].Name)
 	}
 
 	body := RequestBody{
-		ImageID:   image.ID,
+		ImageID:   image.ImageID,
 		Text:      image.Text,
 		Rating:    image.Rating,
 		ImageURL:  image.ImageUrl,
-		Tags:      names,
+		Tags:      image.Tags,
 		CreatedAt: image.CreatedAt.Time,
 	}
 
 	for i := range webhooks {
-		err := EnqueueInvoke(ctx, webhooks[i].ID, body)
+		err := EnqueueInvoke(ctx, webhooks[i].ID, image.ImageID, image.Version, body)
 		if err != nil {
 			return err
 		}
 	}
 
-	if args.Offset+WebhookBatchSize < int32(count) {
-		task, err := NewDispatchTask(args.ID, args.Offset+WebhookBatchSize, args.EventType)
+	if len(webhooks) == WebhookBatchSize {
+		task, err := NewDispatchTask(args.ID, args.VersionID, webhooks[len(webhooks)-1].ID, args.EventType)
 		if err != nil {
 			return err
 		}
 
-		_, err = client.EnqueueContext(ctx, task)
+		_, err = client.EnqueueContext(ctx, task, asynq.Unique(time.Hour))
 
 		if err != nil {
+			if errors.Is(err, asynq.ErrDuplicateTask) {
+				return nil
+			}
 			return err
 		}
 	}
@@ -191,15 +206,30 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 		return err
 	}
 
+	image, err := db.Query().GetImage(ctx, args.ImageID)
+	if err != nil {
+		return err
+	}
+	if shouldIgnoreInvocation(image.Version, args.Version) {
+		return nil
+	}
+	bodyBytes, err := decodeInvokeBody(args.Body)
+	if err != nil {
+		return err
+	}
+
 	webhook, err := db.Query().GetWebhook(ctx, args.WebhookID)
 
 	if err != nil {
 		return err
 	}
+	if !webhook.Active {
+		return nil
+	}
 
 	hash := hmac.New(sha256.New, []byte(webhook.Secret))
 
-	_, err = hash.Write([]byte(args.Body))
+	_, err = hash.Write(bodyBytes)
 	if err != nil {
 		return err
 	}
@@ -208,7 +238,7 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 
 	body := WorkerRequest{
 		URL:             webhook.Endpoint,
-		Body:            args.Body,
+		Body:            string(bodyBytes),
 		ClientSignature: signature,
 	}
 
@@ -220,7 +250,7 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 
 	serverSig := ed25519.Sign(config.GetConfig().Webhook.PrivateKey, b)
 
-	fmt.Printf("sending request to %s\n", config.GetConfig().Webhook.Endpoint)
+	log.Printf("sending webhook request to %s", config.GetConfig().Webhook.Endpoint)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", config.GetConfig().Webhook.Endpoint, bytes.NewReader(b))
 
@@ -228,11 +258,19 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 		return err
 	}
 
-	req.Header.Add("X-Server-Signature", base64.StdEncoding.EncodeToString(serverSig))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Server-Signature", base64.StdEncoding.EncodeToString(serverSig))
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := webhookHTTPClient.Do(req)
 
 	if err != nil {
+		recordErr := db.Query().RecordWebhookFailure(ctx, sqlc.RecordWebhookFailureParams{
+			ID:           args.WebhookID,
+			FailureCount: WebhookMaxFailures,
+		})
+		if recordErr != nil {
+			return errors.Join(err, recordErr)
+		}
 		return err
 	}
 
@@ -240,7 +278,7 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 
 	status := res.StatusCode
 
-	if !(status >= 200 && status < 300) {
+	if status < 200 || status >= 300 {
 		return db.Query().RecordWebhookFailure(ctx, sqlc.RecordWebhookFailureParams{
 			ID: args.WebhookID,
 			LastResponseStatus: pgtype.Int4{
@@ -249,13 +287,12 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 			},
 			FailureCount: WebhookMaxFailures,
 		})
-	} else {
-		return db.Query().RecordWebhookSuccess(ctx, sqlc.RecordWebhookSuccessParams{
-			ID: args.WebhookID,
-			LastResponseStatus: pgtype.Int4{
-				Valid: true,
-				Int32: int32(status),
-			},
-		})
 	}
+	return db.Query().RecordWebhookSuccess(ctx, sqlc.RecordWebhookSuccessParams{
+		ID: args.WebhookID,
+		LastResponseStatus: pgtype.Int4{
+			Valid: true,
+			Int32: int32(status),
+		},
+	})
 }

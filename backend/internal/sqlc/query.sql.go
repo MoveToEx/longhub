@@ -73,27 +73,6 @@ func (q *Queries) CompleteUploadSession(ctx context.Context, arg CompleteUploadS
 	return i, err
 }
 
-const countAvailableWebhooks = `-- name: CountAvailableWebhooks :one
-
-
-SELECT COUNT(*) FROM webhook
-WHERE active = TRUE AND failure_count < $1 AND event_types & $2::BIGINT != 0
-`
-
-type CountAvailableWebhooksParams struct {
-	FailureCount int32 `json:"failureCount"`
-	EventType    int64 `json:"eventType"`
-}
-
-// #endregion
-// #region Webhook
-func (q *Queries) CountAvailableWebhooks(ctx context.Context, arg CountAvailableWebhooksParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countAvailableWebhooks, arg.FailureCount, arg.EventType)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countFavoriteImages = `-- name: CountFavoriteImages :one
 SELECT COUNT(*)
 FROM user_favorite
@@ -736,6 +715,60 @@ func (q *Queries) GetImage(ctx context.Context, id int64) (GetImageRow, error) {
 		&i.UserIdentifier.Username,
 		&i.CurrentVersionID,
 		&i.Version,
+	)
+	return i, err
+}
+
+const getImageVersionForWebhook = `-- name: GetImageVersionForWebhook :one
+SELECT
+    i.id AS image_id,
+    i.image_url,
+    i.created_at,
+    v.text,
+    v.rating,
+    v.version,
+    ARRAY(
+      SELECT name
+      FROM tag t
+      WHERE EXISTS (
+        SELECT 1 FROM version_tag vt
+        WHERE vt.version_id = v.id AND vt.tag_id = t.id
+      )
+    )::TEXT[] AS tags
+FROM public.image i
+JOIN public.version v ON v.image_id = i.id
+WHERE i.id = $1
+  AND v.id = $2
+  AND i.deleted_at IS NULL
+LIMIT 1
+`
+
+type GetImageVersionForWebhookParams struct {
+	ImageID   int64 `json:"imageId"`
+	VersionID int64 `json:"versionId"`
+}
+
+type GetImageVersionForWebhookRow struct {
+	ImageID   int64            `json:"imageId"`
+	ImageUrl  string           `json:"imageUrl"`
+	CreatedAt pgtype.Timestamp `json:"createdAt"`
+	Text      string           `json:"text"`
+	Rating    Rating           `json:"rating"`
+	Version   int32            `json:"version"`
+	Tags      []string         `json:"tags"`
+}
+
+func (q *Queries) GetImageVersionForWebhook(ctx context.Context, arg GetImageVersionForWebhookParams) (GetImageVersionForWebhookRow, error) {
+	row := q.db.QueryRow(ctx, getImageVersionForWebhook, arg.ImageID, arg.VersionID)
+	var i GetImageVersionForWebhookRow
+	err := row.Scan(
+		&i.ImageID,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.Text,
+		&i.Rating,
+		&i.Version,
+		&i.Tags,
 	)
 	return i, err
 }
@@ -1390,10 +1423,14 @@ func (q *Queries) GetUserContribution(ctx context.Context, userID int64) ([]GetU
 }
 
 const getWebhook = `-- name: GetWebhook :one
+
+
 SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
 WHERE id = $1
 `
 
+// #endregion
+// #region Webhook
 func (q *Queries) GetWebhook(ctx context.Context, id int64) (Webhook, error) {
 	row := q.db.QueryRow(ctx, getWebhook, id)
 	var i Webhook
@@ -1460,24 +1497,27 @@ func (q *Queries) GetWebhooks(ctx context.Context, arg GetWebhooksParams) ([]Web
 
 const getWebhooksByEvent = `-- name: GetWebhooksByEvent :many
 SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
-WHERE event_types & $4::BIGINT != 0 AND active = TRUE and failure_count < $1
+WHERE id > $1
+  AND event_types & $2::BIGINT != 0
+  AND active = TRUE
+  AND failure_count < $3
 ORDER BY id ASC
-LIMIT $2 OFFSET $3
+LIMIT $4
 `
 
 type GetWebhooksByEventParams struct {
-	FailureCount int32 `json:"failureCount"`
-	Limit        int32 `json:"limit"`
-	Offset       int32 `json:"offset"`
+	AfterID      int64 `json:"afterId"`
 	EventType    int64 `json:"eventType"`
+	FailureCount int32 `json:"failureCount"`
+	PageLimit    int32 `json:"pageLimit"`
 }
 
 func (q *Queries) GetWebhooksByEvent(ctx context.Context, arg GetWebhooksByEventParams) ([]Webhook, error) {
 	rows, err := q.db.Query(ctx, getWebhooksByEvent,
-		arg.FailureCount,
-		arg.Limit,
-		arg.Offset,
+		arg.AfterID,
 		arg.EventType,
+		arg.FailureCount,
+		arg.PageLimit,
 	)
 	if err != nil {
 		return nil, err
