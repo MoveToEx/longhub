@@ -46,7 +46,8 @@ export default function LikeButton({
       disabled={isLoading || !user}>
       {isLoading && <Spinner />}
       {!isLoading && <Heart fill={data ? '#f84a63' : '#ffffff'} />}
-      Like
+      {data && <span>Edit</span>}
+      {!!data || <span>Like</span>}
     </Button>
   )
 }

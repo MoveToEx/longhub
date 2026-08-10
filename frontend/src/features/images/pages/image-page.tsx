@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/shared/co
 import { Spinner } from "@/shared/components/ui/spinner";
 import useImage from "@/features/images/hooks/use-image";
 import useImageVersions from "@/features/images/hooks/use-image-versions";
-import { Check, ChevronDownIcon, Edit, Hash, InfoIcon, Pilcrow, ShieldAlert, Undo2 } from "lucide-react";
+import { Check, ChevronDownIcon, Copy, Download, Edit, Hash, InfoIcon, Pilcrow, ShieldAlert, Undo2 } from "lucide-react";
 import { useParams } from "react-router"
 import pluralize from 'pluralize'
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
@@ -27,7 +27,7 @@ import type { Rating } from "@/shared/lib/types";
 import _ from "lodash";
 import LikeButton from "../components/like-button";
 import { Alert, AlertDescription } from "@/shared/components/ui/alert";
-import { formatError } from "@/shared/lib/utils";
+import { copyImage, formatError } from "@/shared/lib/utils";
 
 
 type Payload = {
@@ -296,6 +296,23 @@ const editHandle = BaseDialog.createHandle<Payload>();
 
 function Info({ id }: { id: number }) {
   const { data, isLoading } = useImage(id);
+  const [copying, setCopying] = useState(false);
+
+  const handleCopy = async () => {
+    if (!data) return;
+
+    setCopying(true);
+    try {
+      await copyImage(data.imageUrl);
+      toast.success('Copied to clipboard');
+    }
+    catch (e) {
+      toast.error(formatError(e));
+    }
+    finally {
+      setCopying(false);
+    }
+  };
 
   return (
     <div className='w-full h-auto flex flex-col justify-center items-start gap-2'>
@@ -340,6 +357,20 @@ function Info({ id }: { id: number }) {
             </Button>
 
             <LikeButton id={data.id} />
+
+            <Button
+              variant='outline'
+              disabled={copying}
+              onClick={handleCopy}>
+              {copying && <Spinner />}
+              {copying || <Copy />} Copy
+            </Button>
+
+            <Button
+              variant='outline'
+              render={<a href={data.imageUrl} download={`image-${data.id}`} />}>
+              <Download /> Download
+            </Button>
           </CardFooter>
         </Card>
       )}
