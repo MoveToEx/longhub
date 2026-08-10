@@ -31,7 +31,7 @@ const items = [
   },
   {
     title: "Document",
-    url: "https://doc.longhub.top/",
+    url: "https://docs.longhub.top/",
     icon: FileText
   },
 ];
