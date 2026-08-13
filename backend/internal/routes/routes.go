@@ -15,11 +15,18 @@ func RegisterRoutes(r *gin.Engine) {
 		public.POST("/auth/login/webauthn/new", handlers.BeginWebAuthnLogin)
 		public.POST("/auth/login/webauthn/validate", handlers.ValidateWebAuthnLogin)
 		public.POST("/auth/register", handlers.RegisterRoute)
+		public.GET("/image", handlers.ListImages)
 		public.GET("/image/:id", handlers.GetImage)
+		public.POST("/image/search", handlers.SearchImages)
 		public.GET("/image/:id/version", handlers.GetImageVersions)
 		public.GET("/user/:id/contribution", userHandlers.GetUserContribution)
 		public.GET("/user/:id", userHandlers.GetUser)
-		public.GET("/tag/autocomplete", handlers.TagAutocomplete)
+		public.GET("/user/:id/image", userHandlers.ListImagesByUser)
+
+		public.GET("/tag/autocomplete",
+			middleware.Header("Cache-Control", "public, max-age=180, s-age=3600"),
+			handlers.TagAutocomplete,
+		)
 	}
 
 	protected := r.Group("/")
@@ -62,9 +69,5 @@ func RegisterRoutes(r *gin.Engine) {
 	optional.Use(middleware.Auth(false))
 	{
 		optional.POST("/image/quick-search", handlers.QuickSearchImages)
-		optional.POST("/image/search", handlers.SearchImages)
-		optional.GET("/image", handlers.ListImages)
-		optional.GET("/user/:id/image", userHandlers.ListImagesByUser)
 	}
-
 }
