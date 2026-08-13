@@ -98,6 +98,87 @@ function parseTargetUrl(value: string): URL | null {
 	}
 }
 
+const BLOCKED_HOSTNAME_SUFFIXES = [
+	".localhost",
+	".local",
+	".internal",
+	".lan",
+	".home",
+	".test",
+	".invalid",
+];
+
+function isBlockedHostname(hostname: string): boolean {
+	const host = hostname.toLowerCase();
+	if (host === "localhost") {
+		return true;
+	}
+	return BLOCKED_HOSTNAME_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+
+function isIpv4Literal(hostname: string): boolean {
+	return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+	const parts = hostname.split(".").map((part) => Number.parseInt(part, 10));
+	if (
+		parts.length !== 4 ||
+		parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)
+	) {
+		return true;
+	}
+	const [a, b, c] = parts;
+	if (a === 0 || a === 10 || a === 127) return true;
+	if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10
+	if (a === 169 && b === 254) return true; // 169.254.0.0/16
+	if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+	if (a === 192 && b === 168) return true; // 192.168.0.0/16
+	if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // 192.0.0.0/24, 192.0.2.0/24
+	if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15
+	if (a === 198 && b === 51 && c === 100) return true; // 198.51.100.0/24
+	if (a === 203 && b === 0 && c === 113) return true; // 203.0.113.0/24
+	if (a >= 224) return true; // multicast / reserved / broadcast
+	return false;
+}
+
+function isIpv6Literal(hostname: string): boolean {
+	return hostname.includes(":");
+}
+
+function isPrivateIpv6(hostname: string): boolean {
+	let addr = hostname;
+	if (addr.startsWith("[") && addr.endsWith("]")) {
+		addr = addr.slice(1, -1);
+	}
+	const lower = addr.toLowerCase();
+
+	const mapped = lower.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+	if (mapped) {
+		return isPrivateIpv4(mapped[1]);
+	}
+
+	if (lower === "::" || lower === "::1") return true;
+	const firstGroup = lower.split(":")[0];
+	if (firstGroup.startsWith("fc") || firstGroup.startsWith("fd")) return true; // ULA fc00::/7
+	if (lower.startsWith("ff")) return true; // multicast ff00::/8
+	if (/^fe[89ab]/.test(firstGroup)) return true; // link-local fe80::/10
+	return false;
+}
+
+function isPrivateOrBlockedHost(hostname: string): boolean {
+	if (isBlockedHostname(hostname)) {
+		return true;
+	}
+	if (isIpv4Literal(hostname)) {
+		return isPrivateIpv4(hostname);
+	}
+	if (isIpv6Literal(hostname)) {
+		return isPrivateIpv6(hostname);
+	}
+	return false;
+}
+
 export default {
 	async fetch(request, env): Promise<Response> {
 		if (request.method !== "POST") {
@@ -154,6 +235,9 @@ export default {
 		const targetUrl = parseTargetUrl(invocation.url);
 		if (!targetUrl) {
 			return jsonResponse(400, "Webhook URL must use HTTP or HTTPS");
+		}
+		if (isPrivateOrBlockedHost(targetUrl.hostname)) {
+			return jsonResponse(400, "Webhook URL must target a public host");
 		}
 		if (!isHex(invocation.clientSignature)) {
 			return jsonResponse(400, "Client signature must be a hex string");

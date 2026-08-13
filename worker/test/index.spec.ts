@@ -126,6 +126,33 @@ describe("webhook gateway", () => {
 		});
 	});
 
+	it("rejects webhooks targeting private, loopback, or local hosts", async () => {
+		const blocked = [
+			"http://127.0.0.1/hook",
+			"http://10.0.0.1/hook",
+			"http://169.254.169.254/latest/meta-data",
+			"http://172.16.0.1/hook",
+			"http://192.168.1.1/hook",
+			"http://[::1]/hook",
+			"http://localhost/hook",
+			"http://internal.example.internal/hook",
+		];
+
+		for (const url of blocked) {
+			const request = await signedRequest({
+				url,
+				body: "{}",
+				clientSignature: "a1".repeat(32),
+			});
+			const response = await invoke(request);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				error: "Webhook URL must target a public host",
+			});
+		}
+	});
+
 	it("only accepts POST requests", async () => {
 		const request = new IncomingRequest("https://gateway.example/webhook");
 		const response = await invoke(request);
