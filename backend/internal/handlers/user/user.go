@@ -54,6 +54,7 @@ func GetUser(c *gin.Context) {
 	img, err := db.Query().CountImagesByUser(ctx, userID)
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when counting images")
+		return
 	}
 
 	utils.SuccessResponse(c, GetUserResponse{
