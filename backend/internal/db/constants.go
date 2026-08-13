@@ -7,8 +7,8 @@ const (
 )
 
 const (
-	PermissionEdit int64 = 1 << iota
-	PermissionCreate
+	PermissionCreate int64 = 1 << iota
+	PermissionEdit
 	PermissionRequestDeletion
 	PermissionAdmin
 	PermissionApproveDeletion
