@@ -1,30 +1,21 @@
-import { Carousel, CarouselContent, CarouselItem } from "@/shared/components/ui/carousel";
 import { Spinner } from "@/shared/components/ui/spinner";
 import useAuth from "@/features/auth/hooks/use-auth";
 import useFavoriteTags from "@/features/favorites/hooks/use-favorite-tags";
 import useImages from "@/features/images/hooks/use-images";
 import useRandomImages from "@/features/images/hooks/use-random-images";
-import type { Image } from "@/shared/lib/types";
+import type { Image, Tag } from "@/shared/lib/types";
 import { Link } from "react-router";
 
-function ImageCarousal({ items }: {
+function ImageGrid({ items }: {
   items: Pick<Image, 'id' | 'imageUrl'>[]
 }) {
   return (
-    <div className='w-full h-full'>
-      <Carousel className='w-full h-full'>
-        <CarouselContent className='w-full h-full'>
-          {items.map(({ id, imageUrl }) => (
-            <CarouselItem
-              key={id}
-              className='lg:basis-1/6 md:basis-1/3 basis-1/2'>
-              <Link to={`/image/${id}`}>
-                <img className='object-contain object-center w-48 h-32' src={imageUrl} alt='Image' crossOrigin="anonymous" />
-              </Link>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
+    <div className='grid w-full grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6'>
+      {items.map(({ id, imageUrl }) => (
+        <Link key={id} to={`/image/${id}`}>
+          <img className='object-contain object-center w-full h-32' src={imageUrl} alt='Image' crossOrigin="anonymous" />
+        </Link>
+      ))}
     </div>
   )
 }
@@ -49,13 +40,14 @@ function RecommendedImagesRow({ tag }: { tag: string }) {
   }
 
   return (
-    <ImageCarousal items={data} />
+    <ImageGrid items={data.slice(0, 6)} />
   )
 }
 
-function RecommendedImages() {
-  const { data, isLoading } = useFavoriteTags();
-
+function RecommendedImages({ data, isLoading }: {
+  data: (Tag & { count: number })[] | undefined,
+  isLoading: boolean,
+}) {
   if (isLoading) {
     return (
       <div className='w-full h-32 flex flex-row justify-center items-center gap-2'>
@@ -88,32 +80,8 @@ function RecommendedImages() {
   )
 }
 
-function Recommend() {
-  const user = useAuth();
-
-  if (!user.isLoading && !user.data) {
-    return (
-      <div className='w-full h-32 flex flex-row justify-center items-center gap-2'>
-        Login to show recommendations
-      </div>
-    )
-  }
-
-  if (user.isLoading) {
-    return (
-      <div className='w-full h-32 flex flex-row justify-center items-center gap-2'>
-        <Spinner /> Loading...
-      </div>
-    )
-  }
-
-  return (
-    <RecommendedImages />
-  )
-}
-
-function Recent() {
-  const { data, isLoading } = useImages(0, 12);
+function Recent({ expanded }: { expanded: boolean }) {
+  const { data, isLoading } = useImages(0, 24);
 
   if (isLoading) {
     return (
@@ -131,10 +99,13 @@ function Recent() {
     )
   }
 
-  return <ImageCarousal items={data.images} />
+  return <ImageGrid items={data.images.slice(0, expanded ? 24 : 6)} />
 }
 
-export default function IndexPage() {
+function PageSections({ recommendations, expandRecent }: {
+  recommendations: React.ReactNode,
+  expandRecent: boolean,
+}) {
   return (
     <div className='w-full flex flex-col items-center'>
       <div className='w-full flex flex-col items-start gap-8'>
@@ -143,16 +114,59 @@ export default function IndexPage() {
             Based on your favorites
           </div>
           <div className='ml-2 w-full'>
-            <Recommend />
+            {recommendations}
           </div>
         </div>
         <div className='w-full flex flex-col items-start gap-2'>
           <div className='text-2xl'>
             Recent uploads
           </div>
-          <Recent />
+          <Recent expanded={expandRecent} />
         </div>
       </div>
     </div>
   )
+}
+
+function AuthenticatedPage() {
+  const { data, isLoading } = useFavoriteTags();
+
+  return (
+    <PageSections
+      recommendations={<RecommendedImages data={data} isLoading={isLoading} />}
+      expandRecent={!isLoading && data?.length === 0}
+    />
+  )
+}
+
+export default function IndexPage() {
+  const user = useAuth();
+
+  if (user.isLoading) {
+    return (
+      <PageSections
+        recommendations={(
+          <div className='w-full h-32 flex flex-row justify-center items-center gap-2'>
+            <Spinner /> Loading...
+          </div>
+        )}
+        expandRecent={false}
+      />
+    )
+  }
+
+  if (!user.data) {
+    return (
+      <PageSections
+        recommendations={(
+          <div className='w-full h-32 flex flex-row justify-center items-center gap-2'>
+            Login to show recommendations
+          </div>
+        )}
+        expandRecent
+      />
+    )
+  }
+
+  return <AuthenticatedPage />
 }
