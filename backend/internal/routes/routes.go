@@ -64,7 +64,6 @@ func RegisterRoutes(r *gin.Engine) {
 		optional.POST("/image/quick-search", handlers.QuickSearchImages)
 		optional.POST("/image/search", handlers.SearchImages)
 		optional.GET("/image", handlers.ListImages)
-		protected.GET("/tag/random/:name", handlers.GetRandomImagesByTag)
 		optional.GET("/user/:id/image", userHandlers.ListImagesByUser)
 	}
 

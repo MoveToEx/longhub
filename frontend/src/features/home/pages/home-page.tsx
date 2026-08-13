@@ -2,7 +2,6 @@ import { Spinner } from "@/shared/components/ui/spinner";
 import useAuth from "@/features/auth/hooks/use-auth";
 import useFavoriteTags from "@/features/favorites/hooks/use-favorite-tags";
 import useImages from "@/features/images/hooks/use-images";
-import useRandomImages from "@/features/images/hooks/use-random-images";
 import type { Image, Tag } from "@/shared/lib/types";
 import { Link } from "react-router";
 
@@ -20,32 +19,11 @@ function ImageGrid({ items }: {
   )
 }
 
-function RecommendedImagesRow({ tag }: { tag: string }) {
-  const { data, isLoading } = useRandomImages(tag);
-
-  if (isLoading) {
-    return (
-      <div className='w-full h-32 flex flex-row justify-center items-center gap-2'>
-        <Spinner /> Loading
-      </div>
-    )
-  }
-
-  if (!data) {
-    return (
-      <div className='w-full flex flex-row items-center gap-2'>
-        Failed
-      </div>
-    )
-  }
-
-  return (
-    <ImageGrid items={data.slice(0, 6)} />
-  )
-}
-
 function RecommendedImages({ data, isLoading }: {
-  data: (Tag & { count: number })[] | undefined,
+  data: (Tag & {
+    count: number,
+    images: Pick<Image, 'id' | 'imageUrl' | 'imageKey'>[],
+  })[] | undefined,
   isLoading: boolean,
 }) {
   if (isLoading) {
@@ -73,7 +51,7 @@ function RecommendedImages({ data, isLoading }: {
           <div className='text-xl'>
             #{it.name}
           </div>
-          <RecommendedImagesRow tag={it.name} />
+          <ImageGrid items={it.images} />
         </div>
       ))}
     </div>

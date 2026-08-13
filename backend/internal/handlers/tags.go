@@ -46,6 +46,13 @@ func TagAutocomplete(c *gin.Context) {
 	})
 }
 
+type RecommendedTagResponse struct {
+	ID     int64                    `json:"id"`
+	Name   string                   `json:"name"`
+	Count  int64                    `json:"count"`
+	Images []sqlc.GetRandomImageRow `json:"images"`
+}
+
 func GetRecommendedTags(c *gin.Context) {
 	userID := c.GetInt64("UserID")
 
@@ -61,44 +68,24 @@ func GetRecommendedTags(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, tags)
-}
+	recommendations := make([]RecommendedTagResponse, 0, len(tags))
+	for _, tag := range tags {
+		images, err := db.Query().GetRandomImage(ctx, sqlc.GetRandomImageParams{
+			Name:  tag.Name,
+			Limit: 6,
+		})
+		if err != nil {
+			utils.ErrorResponse(c, 500, "Failed when collecting recommended images: %v", err)
+			return
+		}
 
-type RandomImagePayload struct {
-	Limit int32 `form:"limit"`
-}
-
-func GetRandomImagesByTag(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var payload RandomImagePayload
-
-	if err := c.ShouldBindQuery(&payload); err != nil {
-		utils.ErrorResponse(c, 400, "Invalid payload")
-		return
+		recommendations = append(recommendations, RecommendedTagResponse{
+			ID:     tag.ID,
+			Name:   tag.Name,
+			Count:  tag.Count,
+			Images: images,
+		})
 	}
 
-	if payload.Limit < 0 || payload.Limit > 24 {
-		utils.ErrorResponse(c, 400, "Limit exceeds")
-		return
-	}
-
-	tag := c.Param("name")
-
-	if len(tag) == 0 {
-		utils.ErrorResponse(c, 400, "Invalid tag name")
-		return
-	}
-
-	img, err := db.Query().GetRandomImage(ctx, sqlc.GetRandomImageParams{
-		Name:  tag,
-		Limit: payload.Limit,
-	})
-
-	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting images")
-		return
-	}
-
-	utils.SuccessResponse(c, img)
+	utils.SuccessResponse(c, recommendations)
 }

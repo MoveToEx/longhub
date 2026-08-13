@@ -1,9 +1,10 @@
-import type { Tag } from "@/shared/lib/types";
+import type { Image, Tag } from "@/shared/lib/types";
 import api from "@/shared/lib/axios";
 import useTaggedSWR from "@/shared/lib/swr";
 
 type FavoriteTagsResponse = (Tag & {
   count: number,
+  images: Pick<Image, 'id' | 'imageUrl' | 'imageKey'>[],
 })[]
 
 export default function useFavoriteTags() {
