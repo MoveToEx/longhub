@@ -10,6 +10,7 @@ import { Pagination } from "@/shared/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { Spinner } from "@/shared/components/ui/spinner";
 import ImageGrid from "@/features/images/components/image-grid";
+import TagInput from "@/features/tags/components/tag-input";
 import useSearch, {
   type SearchCondition,
   type SearchConditionType,
@@ -137,6 +138,15 @@ export default function SearchPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              ) : condition.type === 'tagInclude' || condition.type === 'tagExclude' ? (
+                <TagInput
+                  required
+                  className='md:flex-1'
+                  placeholder={conditionPlaceholder[condition.type]}
+                  value={condition.value}
+                  onValueChange={value => updateCondition(condition.id, { value })}
+                  onTagSelect={value => updateCondition(condition.id, { value })}
+                />
               ) : (
                 <Input
                   required
