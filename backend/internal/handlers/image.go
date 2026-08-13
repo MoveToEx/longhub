@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"long/internal/config"
-	"long/internal/constant"
 	"long/internal/db"
 	"long/internal/queue"
 	"long/internal/sqlc"
@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/meilisearch/meilisearch-go"
 )
@@ -47,7 +48,11 @@ func GetImage(c *gin.Context) {
 	img, err := db.Query().GetImage(ctx, id)
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when getting image")
+		if errors.Is(err, pgx.ErrNoRows) {
+			utils.ErrorResponse(c, 404, "Image not found")
+		} else {
+			utils.ErrorResponse(c, 500, "Failed when getting image")
+		}
 		return
 	}
 
@@ -86,7 +91,7 @@ func GetImageVersions(c *gin.Context) {
 	ver, err := db.Query().GetImageVersions(ctx, id)
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting versions: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting versions")
 		return
 	}
 
@@ -109,14 +114,14 @@ func ListImages(c *gin.Context) {
 	})
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting images: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting images")
 		return
 	}
 
 	total, err := db.Query().CountImages(ctx)
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when counting images: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when counting images")
 		return
 	}
 
@@ -223,7 +228,7 @@ func SearchImages(c *gin.Context) {
 
 	msr, err := config.MeiliSearch().Index("images").Search("", request)
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when searching images: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when searching images")
 		return
 	}
 
@@ -375,7 +380,7 @@ type UpdateResponse struct {
 func UpdateImage(c *gin.Context) {
 	permission := c.GetInt64("Permission")
 
-	if permission&constant.EditImage != constant.EditImage {
+	if permission&db.PermissionEdit != db.PermissionEdit {
 		utils.ErrorResponse(c, 403, "Operation not allowed")
 		return
 	}
@@ -401,7 +406,11 @@ func UpdateImage(c *gin.Context) {
 	current, err := db.Query().GetImage(ctx, imageID)
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Server error: %v", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			utils.ErrorResponse(c, 404, "Image not found")
+		} else {
+			utils.ErrorResponse(c, 500, "Server error")
+		}
 		return
 	}
 
@@ -414,7 +423,7 @@ func UpdateImage(c *gin.Context) {
 	text := current.Text
 	tags, err := db.Query().GetTagsByVersion(ctx, current.CurrentVersionID.Int64)
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting current tags: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting current tags")
 		return
 	}
 
@@ -447,7 +456,7 @@ func UpdateImage(c *gin.Context) {
 	})
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when creating new version: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when creating new version")
 		return
 	}
 
@@ -476,7 +485,7 @@ type SignResponse struct {
 func CreateUploadSession(c *gin.Context) {
 	permission := c.GetInt64("Permission")
 
-	if permission&constant.CreateImage != constant.CreateImage {
+	if permission&db.PermissionCreate != db.PermissionCreate {
 		utils.ErrorResponse(c, 403, "Operation not allowed")
 		return
 	}
@@ -522,7 +531,7 @@ func CreateUploadSession(c *gin.Context) {
 	})
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when presigning request: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when presigning request")
 		return
 	}
 
@@ -539,7 +548,7 @@ func CreateUploadSession(c *gin.Context) {
 	})
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when creating session: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when creating session")
 		return
 	}
 
@@ -564,7 +573,7 @@ type AckResponse struct {
 func AcknowledgeSession(c *gin.Context) {
 	permission := c.GetInt64("Permission")
 
-	if permission&constant.CreateImage != constant.CreateImage {
+	if permission&db.PermissionCreate != db.PermissionCreate {
 		utils.ErrorResponse(c, 403, "Operation not allowed")
 		return
 	}

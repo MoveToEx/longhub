@@ -1,12 +1,14 @@
 package user
 
 import (
+	"errors"
 	"long/internal/db"
 	"long/internal/sqlc"
 	"long/internal/utils"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 func GetSelf(c *gin.Context) {
@@ -41,7 +43,11 @@ func GetUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	user, err := db.Query().GetOther(ctx, userID)
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting user: %v", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			utils.ErrorResponse(c, 404, "User not found")
+		} else {
+			utils.ErrorResponse(c, 500, "Failed when collecting user")
+		}
 		return
 	}
 
@@ -77,7 +83,7 @@ func GetUserContribution(c *gin.Context) {
 	contribution, err := db.Query().GetUserContribution(ctx, userID)
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting contribution: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting contribution")
 		return
 	}
 

@@ -37,7 +37,7 @@ func TagAutocomplete(c *gin.Context) {
 	})
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting tags: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting tags")
 		return
 	}
 
@@ -64,7 +64,7 @@ func GetRecommendedTags(c *gin.Context) {
 	})
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting tags: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting tags")
 		return
 	}
 
@@ -75,7 +75,7 @@ func GetRecommendedTags(c *gin.Context) {
 			Limit: 6,
 		})
 		if err != nil {
-			utils.ErrorResponse(c, 500, "Failed when collecting recommended images: %v", err)
+			utils.ErrorResponse(c, 500, "Failed when collecting recommended images")
 			return
 		}
 

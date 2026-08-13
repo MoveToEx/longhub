@@ -57,7 +57,7 @@ func LoginRoute(c *gin.Context) {
 	token, err := utils.NewToken(user.ID, user.Permission)
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when generating token: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when generating token")
 		return
 	}
 
@@ -96,7 +96,7 @@ func RegisterRoute(c *gin.Context) {
 	})
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Unable to create user: %v", err)
+		utils.ErrorResponse(c, 500, "Unable to create user")
 		return
 	}
 
@@ -167,7 +167,7 @@ func ValidateWebAuthnLogin(c *gin.Context) {
 	token, err := utils.NewToken(resolved.ID, resolved.Permission)
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when generating token: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when generating token")
 		return
 	}
 
@@ -190,7 +190,7 @@ func GetIdentity(c *gin.Context) {
 	user, err := db.Query().GetUser(ctx, userID)
 
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting user: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting user")
 		return
 	}
 

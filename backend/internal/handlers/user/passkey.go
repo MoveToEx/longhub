@@ -21,13 +21,13 @@ func BeginAddPasskey(c *gin.Context) {
 
 	user, err := db.Query().GetUser(ctx, userID)
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when getting user: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when getting user")
 		return
 	}
 
 	wu, err := utils.FromUser(ctx, user)
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting credential: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting credential")
 		return
 	}
 
@@ -84,13 +84,13 @@ func ValidateAddPasskey(c *gin.Context) {
 
 	wu, err := utils.FromUser(ctx, user)
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when collecting credential: %v", err)
+		utils.ErrorResponse(c, 500, "Failed when collecting credential")
 		return
 	}
 
 	cred, err := w.FinishRegistration(*wu, *session, c.Request)
 	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when generating credential: %s", err.Error())
+		utils.ErrorResponse(c, 500, "Failed when generating credential")
 		return
 	}
 
