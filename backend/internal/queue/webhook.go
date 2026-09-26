@@ -56,10 +56,16 @@ type WorkerRequest struct {
 	ClientSignature string `json:"clientSignature"`
 }
 
+type InvocationBody struct {
+	Event string          `json:"event"`
+	Data  json.RawMessage `json:"data"`
+}
+
 type InvokeArgs struct {
 	WebhookID int64           `json:"webhookId"`
 	ImageID   int64           `json:"imageId"`
 	Version   int32           `json:"version"`
+	EventType int64           `json:"eventType"`
 	Body      json.RawMessage `json:"body"`
 }
 
@@ -76,6 +82,31 @@ func decodeInvokeBody(raw json.RawMessage) ([]byte, error) {
 		return []byte(body), nil
 	}
 	return raw, nil
+}
+
+func webhookEventName(eventType int64) (string, error) {
+	switch eventType {
+	case db.WebhookCreationEvent:
+		return "create", nil
+	case db.WebhookUpdateEvent:
+		return "update", nil
+	case db.WebhookDeletionEvent:
+		return "delete", nil
+	default:
+		return "", errors.New("invalid webhook event type")
+	}
+}
+
+func buildInvocationBody(eventType int64, data []byte) ([]byte, error) {
+	event, err := webhookEventName(eventType)
+	if err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(InvocationBody{
+		Event: event,
+		Data:  json.RawMessage(data),
+	})
 }
 
 func NewDispatchTask(id, versionID, lastWebhookID int64, event int64) (*asynq.Task, error) {
@@ -104,8 +135,8 @@ func EnqueueDispatch(ctx context.Context, imageID, versionID int64, event int64)
 	return err
 }
 
-func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32, body RequestBody) error {
-	task, err := NewInvokeTask(webhookID, imageID, version, body)
+func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32, eventType int64, body RequestBody) error {
+	task, err := NewInvokeTask(webhookID, imageID, version, eventType, body)
 
 	if err != nil {
 		return err
@@ -122,7 +153,7 @@ func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32,
 	return nil
 }
 
-func NewInvokeTask(id, imageID int64, version int32, body RequestBody) (*asynq.Task, error) {
+func NewInvokeTask(id, imageID int64, version int32, eventType int64, body RequestBody) (*asynq.Task, error) {
 	payloadBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -131,6 +162,7 @@ func NewInvokeTask(id, imageID int64, version int32, body RequestBody) (*asynq.T
 		WebhookID: id,
 		ImageID:   imageID,
 		Version:   version,
+		EventType: eventType,
 		Body:      payloadBody,
 	})
 	if err != nil {
@@ -175,7 +207,7 @@ func HandleDispatchTask(ctx context.Context, task *asynq.Task) error {
 	}
 
 	for i := range webhooks {
-		err := EnqueueInvoke(ctx, webhooks[i].ID, image.ImageID, image.Version, body)
+		err := EnqueueInvoke(ctx, webhooks[i].ID, image.ImageID, image.Version, args.EventType, body)
 		if err != nil {
 			return err
 		}
@@ -217,6 +249,10 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 	if err != nil {
 		return err
 	}
+	invocationBody, err := buildInvocationBody(args.EventType, bodyBytes)
+	if err != nil {
+		return err
+	}
 
 	webhook, err := db.Query().GetWebhook(ctx, args.WebhookID)
 
@@ -229,7 +265,7 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 
 	hash := hmac.New(sha256.New, []byte(webhook.Secret))
 
-	_, err = hash.Write(bodyBytes)
+	_, err = hash.Write(invocationBody)
 	if err != nil {
 		return err
 	}
@@ -238,7 +274,7 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 
 	body := WorkerRequest{
 		URL:             webhook.Endpoint,
-		Body:            string(bodyBytes),
+		Body:            string(invocationBody),
 		ClientSignature: signature,
 	}
 

@@ -16,7 +16,7 @@ Send a `POST` request whose raw JSON body has this shape:
 ```json
 {
   "url": "https://client.example/webhook",
-  "body": "{\"imageID\":42}",
+  "body": "{\"event\":\"create\",\"data\":{\"imageID\":42}}",
   "clientSignature": "0123456789abcdef"
 }
 ```
