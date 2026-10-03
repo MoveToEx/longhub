@@ -1,14 +1,19 @@
 package user
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"long/internal/db"
 	"long/internal/sqlc"
 	"long/internal/utils"
+	webhookpayload "long/internal/webhook"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ListWebhooksResponse struct {
@@ -20,6 +25,7 @@ type ListWebhooksResponse struct {
 	LastActivatedAt    *time.Time `json:"lastActivatedAt"`
 	LastResponseStatus *int32     `json:"lastResponseStatus"`
 	FailureCount       int32      `json:"failureCount"`
+	BodyTemplate       *string    `json:"bodyTemplate"`
 }
 
 func ListWebhooks(c *gin.Context) {
@@ -38,12 +44,16 @@ func ListWebhooks(c *gin.Context) {
 	for i := range webhooks {
 		var status *int32 = nil
 		var activatedAt *time.Time = nil
+		var bodyTemplate *string
 
 		if webhooks[i].LastResponseStatus.Valid {
 			status = new(webhooks[i].LastResponseStatus.Int32)
 		}
 		if webhooks[i].LastActivatedAt.Valid {
 			activatedAt = new(webhooks[i].LastActivatedAt.Time)
+		}
+		if webhooks[i].BodyTemplate.Valid {
+			bodyTemplate = &webhooks[i].BodyTemplate.String
 		}
 		result = append(result, ListWebhooksResponse{
 			ID:                 webhooks[i].ID,
@@ -54,6 +64,7 @@ func ListWebhooks(c *gin.Context) {
 			LastActivatedAt:    activatedAt,
 			LastResponseStatus: status,
 			FailureCount:       webhooks[i].FailureCount,
+			BodyTemplate:       bodyTemplate,
 		})
 	}
 
@@ -61,11 +72,12 @@ func ListWebhooks(c *gin.Context) {
 }
 
 type CreateWebhookPayload struct {
-	Label      string `json:"label"`
-	EventTypes int64  `json:"eventTypes"`
-	Secret     string `json:"secret"`
-	Endpoint   string `json:"endpoint"`
-	Active     bool   `json:"active"`
+	Label        string  `json:"label"`
+	EventTypes   int64   `json:"eventTypes"`
+	Secret       string  `json:"secret"`
+	Endpoint     string  `json:"endpoint"`
+	Active       bool    `json:"active"`
+	BodyTemplate *string `json:"bodyTemplate"`
 }
 
 type CreateWebhookResponse struct {
@@ -77,6 +89,11 @@ func CreateWebhook(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		utils.ErrorResponse(c, 400, "Failed when parsing body")
+		return
+	}
+	bodyTemplate := nullableBodyTemplate(payload.BodyTemplate)
+	if err := validateBodyTemplate(bodyTemplate, payload.EventTypes); err != nil {
+		utils.ErrorResponse(c, 400, "%s", err.Error())
 		return
 	}
 
@@ -96,12 +113,13 @@ func CreateWebhook(c *gin.Context) {
 	}
 
 	hook, err := db.Query().NewWebhook(ctx, sqlc.NewWebhookParams{
-		UserID:     userID,
-		Label:      payload.Label,
-		Secret:     payload.Secret,
-		EventTypes: payload.EventTypes,
-		Endpoint:   payload.Endpoint,
-		Active:     payload.Active,
+		UserID:       userID,
+		Label:        payload.Label,
+		Secret:       payload.Secret,
+		EventTypes:   payload.EventTypes,
+		Endpoint:     payload.Endpoint,
+		Active:       payload.Active,
+		BodyTemplate: bodyTemplate,
 	})
 
 	if err != nil {
@@ -109,18 +127,19 @@ func CreateWebhook(c *gin.Context) {
 		return
 	}
 
-	utils.CreatedResponse(c, CreateAppKeyResponse{
+	utils.CreatedResponse(c, CreateWebhookResponse{
 		ID: hook.ID,
 	})
 }
 
 type EditWebhookPayload struct {
-	ID         int64   `uri:"id"`
-	Label      *string `json:"label"`
-	EventTypes *int64  `json:"eventTypes"`
-	Secret     *string `json:"secret"`
-	Endpoint   *string `json:"endpoint"`
-	Active     *bool   `json:"active"`
+	ID           int64           `uri:"id"`
+	Label        *string         `json:"label"`
+	EventTypes   *int64          `json:"eventTypes"`
+	Secret       *string         `json:"secret"`
+	Endpoint     *string         `json:"endpoint"`
+	Active       *bool           `json:"active"`
+	BodyTemplate json.RawMessage `json:"bodyTemplate"`
 }
 
 func EditWebhook(c *gin.Context) {
@@ -154,12 +173,13 @@ func EditWebhook(c *gin.Context) {
 	}
 
 	args := sqlc.UpdateWebhookParams{
-		Label:      webhook.Label,
-		Endpoint:   webhook.Endpoint,
-		EventTypes: webhook.EventTypes,
-		Secret:     webhook.Secret,
-		ID:         webhook.ID,
-		Active:     webhook.Active,
+		Label:        webhook.Label,
+		Endpoint:     webhook.Endpoint,
+		EventTypes:   webhook.EventTypes,
+		Secret:       webhook.Secret,
+		ID:           webhook.ID,
+		Active:       webhook.Active,
+		BodyTemplate: webhook.BodyTemplate,
 	}
 
 	if payload.Endpoint != nil {
@@ -177,6 +197,20 @@ func EditWebhook(c *gin.Context) {
 	if payload.Active != nil {
 		args.Active = *payload.Active
 	}
+	if payload.BodyTemplate != nil {
+		var value *string
+		if err := json.Unmarshal(payload.BodyTemplate, &value); err != nil {
+			utils.ErrorResponse(c, 400, "Body template must be a string or null")
+			return
+		}
+		args.BodyTemplate = nullableBodyTemplate(value)
+	}
+	if payload.BodyTemplate != nil || payload.EventTypes != nil {
+		if err := validateBodyTemplate(args.BodyTemplate, args.EventTypes); err != nil {
+			utils.ErrorResponse(c, 400, "%s", err.Error())
+			return
+		}
+	}
 
 	err = db.Query().UpdateWebhook(ctx, args)
 
@@ -186,6 +220,57 @@ func EditWebhook(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, nil)
+}
+
+func nullableBodyTemplate(value *string) pgtype.Text {
+	if value == nil || strings.TrimSpace(*value) == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *value, Valid: true}
+}
+
+func validateBodyTemplate(value pgtype.Text, eventTypes int64) error {
+	if !value.Valid {
+		return nil
+	}
+	eventTypes &= db.WebhookCreationEvent | db.WebhookUpdateEvent | db.WebhookDeletionEvent
+	for _, event := range []struct {
+		flag int64
+		name string
+	}{
+		{db.WebhookCreationEvent, "create"},
+		{db.WebhookUpdateEvent, "update"},
+		{db.WebhookDeletionEvent, "delete"},
+	} {
+		if eventTypes&event.flag == 0 && eventTypes != 0 {
+			continue
+		}
+		if _, err := webhookpayload.Render(value.String, event.name, webhookpayload.PreviewData(event.name), webhookpayload.PreviewInitiator(event.name)); err != nil {
+			return fmt.Errorf("Invalid body template for %s: %w", event.name, err)
+		}
+	}
+	return nil
+}
+
+type PreviewWebhookPayload struct {
+	BodyTemplate string `json:"bodyTemplate"`
+	Event        string `json:"event" binding:"required,oneof=create update delete"`
+}
+
+func PreviewWebhook(c *gin.Context) {
+	var payload PreviewWebhookPayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		utils.ErrorResponse(c, 400, "Invalid preview request")
+		return
+	}
+	body, err := webhookpayload.Render(payload.BodyTemplate, payload.Event, webhookpayload.PreviewData(payload.Event), webhookpayload.PreviewInitiator(payload.Event))
+	if err != nil {
+		utils.ErrorResponse(c, 400, "%s", err.Error())
+		return
+	}
+	utils.SuccessResponse(c, struct {
+		Body json.RawMessage `json:"body"`
+	}{Body: body})
 }
 
 type DeleteWebhookPayload struct {

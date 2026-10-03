@@ -86,4 +86,5 @@ export type Webhook = {
   lastActivatedAt: string | null,
   lastResponseStatus: number | null,
   failureCount: number,
+  bodyTemplate: string | null,
 }

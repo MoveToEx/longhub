@@ -727,6 +727,10 @@ SELECT
     v.text,
     v.rating,
     v.version,
+    uploader.id AS uploader_id,
+    uploader.username AS uploader_username,
+    initiator.id AS initiator_id,
+    initiator.username AS initiator_username,
     ARRAY(
       SELECT name
       FROM tag t
@@ -737,6 +741,8 @@ SELECT
     )::TEXT[] AS tags
 FROM public.image i
 JOIN public.version v ON v.image_id = i.id
+JOIN public.user_identifier uploader ON uploader.id = i.user_id
+JOIN public.user_identifier initiator ON initiator.id = v.user_id
 WHERE i.id = $1
   AND v.id = $2
   AND i.deleted_at IS NULL
@@ -749,13 +755,17 @@ type GetImageVersionForWebhookParams struct {
 }
 
 type GetImageVersionForWebhookRow struct {
-	ImageID   int64            `json:"imageId"`
-	ImageUrl  string           `json:"imageUrl"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	Text      string           `json:"text"`
-	Rating    Rating           `json:"rating"`
-	Version   int32            `json:"version"`
-	Tags      []string         `json:"tags"`
+	ImageID           int64            `json:"imageId"`
+	ImageUrl          string           `json:"imageUrl"`
+	CreatedAt         pgtype.Timestamp `json:"createdAt"`
+	Text              string           `json:"text"`
+	Rating            Rating           `json:"rating"`
+	Version           int32            `json:"version"`
+	UploaderID        int64            `json:"uploaderId"`
+	UploaderUsername  string           `json:"uploaderUsername"`
+	InitiatorID       int64            `json:"initiatorId"`
+	InitiatorUsername string           `json:"initiatorUsername"`
+	Tags              []string         `json:"tags"`
 }
 
 func (q *Queries) GetImageVersionForWebhook(ctx context.Context, arg GetImageVersionForWebhookParams) (GetImageVersionForWebhookRow, error) {
@@ -768,6 +778,10 @@ func (q *Queries) GetImageVersionForWebhook(ctx context.Context, arg GetImageVer
 		&i.Text,
 		&i.Rating,
 		&i.Version,
+		&i.UploaderID,
+		&i.UploaderUsername,
+		&i.InitiatorID,
+		&i.InitiatorUsername,
 		&i.Tags,
 	)
 	return i, err
@@ -987,6 +1001,37 @@ func (q *Queries) GetPasskey(ctx context.Context, userID int64) ([]GetPasskeyRow
 		return nil, err
 	}
 	return items, nil
+}
+
+const getPreviousImageVersionForWebhook = `-- name: GetPreviousImageVersionForWebhook :one
+SELECT v.text, v.rating, ARRAY(
+    SELECT t.name FROM tag t
+    JOIN version_tag vt ON vt.tag_id = t.id
+    WHERE vt.version_id = v.id
+    ORDER BY t.name
+)::TEXT[] AS tags
+FROM version v
+WHERE v.image_id = $1 AND v.version < $2::INT
+ORDER BY v.version DESC
+LIMIT 1
+`
+
+type GetPreviousImageVersionForWebhookParams struct {
+	ImageID int64 `json:"imageId"`
+	Version int32 `json:"version"`
+}
+
+type GetPreviousImageVersionForWebhookRow struct {
+	Text   string   `json:"text"`
+	Rating Rating   `json:"rating"`
+	Tags   []string `json:"tags"`
+}
+
+func (q *Queries) GetPreviousImageVersionForWebhook(ctx context.Context, arg GetPreviousImageVersionForWebhookParams) (GetPreviousImageVersionForWebhookRow, error) {
+	row := q.db.QueryRow(ctx, getPreviousImageVersionForWebhook, arg.ImageID, arg.Version)
+	var i GetPreviousImageVersionForWebhookRow
+	err := row.Scan(&i.Text, &i.Rating, &i.Tags)
+	return i, err
 }
 
 const getRandomImage = `-- name: GetRandomImage :many
@@ -1425,7 +1470,7 @@ func (q *Queries) GetUserContribution(ctx context.Context, userID int64) ([]GetU
 const getWebhook = `-- name: GetWebhook :one
 
 
-SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template FROM webhook
 WHERE id = $1
 `
 
@@ -1446,12 +1491,13 @@ func (q *Queries) GetWebhook(ctx context.Context, id int64) (Webhook, error) {
 		&i.LastActivatedAt,
 		&i.LastResponseStatus,
 		&i.FailureCount,
+		&i.BodyTemplate,
 	)
 	return i, err
 }
 
 const getWebhooks = `-- name: GetWebhooks :many
-SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template FROM webhook
 WHERE active = TRUE AND failure_count < $3
 ORDER BY id ASC
 LIMIT $1 OFFSET $2
@@ -1484,6 +1530,7 @@ func (q *Queries) GetWebhooks(ctx context.Context, arg GetWebhooksParams) ([]Web
 			&i.LastActivatedAt,
 			&i.LastResponseStatus,
 			&i.FailureCount,
+			&i.BodyTemplate,
 		); err != nil {
 			return nil, err
 		}
@@ -1496,7 +1543,7 @@ func (q *Queries) GetWebhooks(ctx context.Context, arg GetWebhooksParams) ([]Web
 }
 
 const getWebhooksByEvent = `-- name: GetWebhooksByEvent :many
-SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template FROM webhook
 WHERE id > $1
   AND event_types & $2::BIGINT != 0
   AND active = TRUE
@@ -1538,6 +1585,7 @@ func (q *Queries) GetWebhooksByEvent(ctx context.Context, arg GetWebhooksByEvent
 			&i.LastActivatedAt,
 			&i.LastResponseStatus,
 			&i.FailureCount,
+			&i.BodyTemplate,
 		); err != nil {
 			return nil, err
 		}
@@ -1550,7 +1598,7 @@ func (q *Queries) GetWebhooksByEvent(ctx context.Context, arg GetWebhooksByEvent
 }
 
 const getWebhooksByUser = `-- name: GetWebhooksByUser :many
-SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count FROM webhook
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template FROM webhook
 WHERE user_id = $1
 `
 
@@ -1575,6 +1623,7 @@ func (q *Queries) GetWebhooksByUser(ctx context.Context, userID int64) ([]Webhoo
 			&i.LastActivatedAt,
 			&i.LastResponseStatus,
 			&i.FailureCount,
+			&i.BodyTemplate,
 		); err != nil {
 			return nil, err
 		}
@@ -1689,18 +1738,19 @@ func (q *Queries) MarkUploadSessionAsExpired(ctx context.Context, id int64) erro
 }
 
 const newWebhook = `-- name: NewWebhook :one
-INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count
+INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active, body_template)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template
 `
 
 type NewWebhookParams struct {
-	UserID     int64  `json:"userId"`
-	Label      string `json:"label"`
-	Endpoint   string `json:"endpoint"`
-	EventTypes int64  `json:"eventTypes"`
-	Secret     string `json:"secret"`
-	Active     bool   `json:"active"`
+	UserID       int64       `json:"userId"`
+	Label        string      `json:"label"`
+	Endpoint     string      `json:"endpoint"`
+	EventTypes   int64       `json:"eventTypes"`
+	Secret       string      `json:"secret"`
+	Active       bool        `json:"active"`
+	BodyTemplate pgtype.Text `json:"bodyTemplate"`
 }
 
 func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook, error) {
@@ -1711,6 +1761,7 @@ func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook
 		arg.EventTypes,
 		arg.Secret,
 		arg.Active,
+		arg.BodyTemplate,
 	)
 	var i Webhook
 	err := row.Scan(
@@ -1725,6 +1776,7 @@ func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook
 		&i.LastActivatedAt,
 		&i.LastResponseStatus,
 		&i.FailureCount,
+		&i.BodyTemplate,
 	)
 	return i, err
 }
@@ -1967,17 +2019,19 @@ SET label = $1,
     event_types = $3,
     secret = $4,
     failure_count = CASE WHEN active = FALSE AND $5 = TRUE THEN 0 ELSE failure_count END,
-    active = $5
+    active = $5,
+    body_template = $7
 WHERE id = $6
 `
 
 type UpdateWebhookParams struct {
-	Label      string `json:"label"`
-	Endpoint   string `json:"endpoint"`
-	EventTypes int64  `json:"eventTypes"`
-	Secret     string `json:"secret"`
-	Active     bool   `json:"active"`
-	ID         int64  `json:"id"`
+	Label        string      `json:"label"`
+	Endpoint     string      `json:"endpoint"`
+	EventTypes   int64       `json:"eventTypes"`
+	Secret       string      `json:"secret"`
+	Active       bool        `json:"active"`
+	ID           int64       `json:"id"`
+	BodyTemplate pgtype.Text `json:"bodyTemplate"`
 }
 
 func (q *Queries) UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) error {
@@ -1988,6 +2042,7 @@ func (q *Queries) UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) er
 		arg.Secret,
 		arg.Active,
 		arg.ID,
+		arg.BodyTemplate,
 	)
 	return err
 }

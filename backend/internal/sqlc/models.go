@@ -257,4 +257,5 @@ type Webhook struct {
 	LastActivatedAt    pgtype.Timestamp `json:"lastActivatedAt"`
 	LastResponseStatus pgtype.Int4      `json:"lastResponseStatus"`
 	FailureCount       int32            `json:"failureCount"`
+	BodyTemplate       pgtype.Text      `json:"bodyTemplate"`
 }

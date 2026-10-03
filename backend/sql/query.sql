@@ -29,6 +29,10 @@ SELECT
     v.text,
     v.rating,
     v.version,
+    uploader.id AS uploader_id,
+    uploader.username AS uploader_username,
+    initiator.id AS initiator_id,
+    initiator.username AS initiator_username,
     ARRAY(
       SELECT name
       FROM tag t
@@ -39,9 +43,23 @@ SELECT
     )::TEXT[] AS tags
 FROM public.image i
 JOIN public.version v ON v.image_id = i.id
+JOIN public.user_identifier uploader ON uploader.id = i.user_id
+JOIN public.user_identifier initiator ON initiator.id = v.user_id
 WHERE i.id = @image_id
   AND v.id = @version_id
   AND i.deleted_at IS NULL
+LIMIT 1;
+
+-- name: GetPreviousImageVersionForWebhook :one
+SELECT v.text, v.rating, ARRAY(
+    SELECT t.name FROM tag t
+    JOIN version_tag vt ON vt.tag_id = t.id
+    WHERE vt.version_id = v.id
+    ORDER BY t.name
+)::TEXT[] AS tags
+FROM version v
+WHERE v.image_id = @image_id AND v.version < @version::INT
+ORDER BY v.version DESC
 LIMIT 1;
 
 -- name: ListImages :many
@@ -498,8 +516,8 @@ SELECT COUNT(*) FROM webhook
 WHERE user_id = $1;
 
 -- name: NewWebhook :one
-INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active, body_template)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: DeleteWebhook :exec
@@ -513,7 +531,8 @@ SET label = $1,
     event_types = $3,
     secret = $4,
     failure_count = CASE WHEN active = FALSE AND $5 = TRUE THEN 0 ELSE failure_count END,
-    active = $5
+    active = $5,
+    body_template = $7
 WHERE id = $6;
 
 -- name: GetWebhooks :many

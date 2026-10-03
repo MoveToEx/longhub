@@ -61,6 +61,7 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.GET("/user/appkey", userHandlers.GetAppKey)
 		protected.GET("/user/webhook", userHandlers.ListWebhooks)
 		protected.POST("/user/webhook", userHandlers.CreateWebhook)
+		protected.POST("/user/webhook/preview", userHandlers.PreviewWebhook)
 		protected.PATCH("/user/webhook/:id", userHandlers.EditWebhook)
 		protected.DELETE("/user/webhook/:id", userHandlers.DeleteWebhook)
 	}

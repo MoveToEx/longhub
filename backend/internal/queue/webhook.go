@@ -14,7 +14,9 @@ import (
 	"long/internal/config"
 	"long/internal/db"
 	"long/internal/sqlc"
+	webhookpayload "long/internal/webhook"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -41,14 +43,7 @@ type DispatchArgs struct {
 	EventType     int64 `json:"eventType"`
 }
 
-type RequestBody struct {
-	ImageID   int64       `json:"imageID"`
-	Text      string      `json:"text"`
-	Rating    sqlc.Rating `json:"rating"`
-	Tags      []string    `json:"tags"`
-	ImageURL  string      `json:"imageURL"`
-	CreatedAt time.Time   `json:"createdAt"`
-}
+type RequestBody = webhookpayload.Data
 
 type WorkerRequest struct {
 	URL             string `json:"url"`
@@ -57,16 +52,18 @@ type WorkerRequest struct {
 }
 
 type InvocationBody struct {
-	Event string          `json:"event"`
-	Data  json.RawMessage `json:"data"`
+	Event     string               `json:"event"`
+	Data      json.RawMessage      `json:"data"`
+	Initiator *webhookpayload.User `json:"initiator,omitempty"`
 }
 
 type InvokeArgs struct {
-	WebhookID int64           `json:"webhookId"`
-	ImageID   int64           `json:"imageId"`
-	Version   int32           `json:"version"`
-	EventType int64           `json:"eventType"`
-	Body      json.RawMessage `json:"body"`
+	WebhookID int64                `json:"webhookId"`
+	ImageID   int64                `json:"imageId"`
+	Version   int32                `json:"version"`
+	EventType int64                `json:"eventType"`
+	Body      json.RawMessage      `json:"body"`
+	Initiator *webhookpayload.User `json:"initiator,omitempty"`
 }
 
 func shouldIgnoreInvocation(currentVersion, dispatchedVersion int32) bool {
@@ -97,15 +94,23 @@ func webhookEventName(eventType int64) (string, error) {
 	}
 }
 
-func buildInvocationBody(eventType int64, data []byte) ([]byte, error) {
+func buildInvocationBody(eventType int64, data []byte, bodyTemplate string, initiator *webhookpayload.User) ([]byte, error) {
 	event, err := webhookEventName(eventType)
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(bodyTemplate) != "" {
+		var body RequestBody
+		if err := json.Unmarshal(data, &body); err != nil {
+			return nil, err
+		}
+		return webhookpayload.Render(bodyTemplate, event, body, initiator)
+	}
 
 	return json.Marshal(InvocationBody{
-		Event: event,
-		Data:  json.RawMessage(data),
+		Event:     event,
+		Data:      json.RawMessage(data),
+		Initiator: initiator,
 	})
 }
 
@@ -135,8 +140,8 @@ func EnqueueDispatch(ctx context.Context, imageID, versionID int64, event int64)
 	return err
 }
 
-func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32, eventType int64, body RequestBody) error {
-	task, err := NewInvokeTask(webhookID, imageID, version, eventType, body)
+func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32, eventType int64, body RequestBody, initiator *webhookpayload.User) error {
+	task, err := NewInvokeTask(webhookID, imageID, version, eventType, body, initiator)
 
 	if err != nil {
 		return err
@@ -153,7 +158,7 @@ func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32,
 	return nil
 }
 
-func NewInvokeTask(id, imageID int64, version int32, eventType int64, body RequestBody) (*asynq.Task, error) {
+func NewInvokeTask(id, imageID int64, version int32, eventType int64, body RequestBody, initiator *webhookpayload.User) (*asynq.Task, error) {
 	payloadBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -164,6 +169,7 @@ func NewInvokeTask(id, imageID int64, version int32, eventType int64, body Reque
 		Version:   version,
 		EventType: eventType,
 		Body:      payloadBody,
+		Initiator: initiator,
 	})
 	if err != nil {
 		return nil, err
@@ -204,10 +210,28 @@ func HandleDispatchTask(ctx context.Context, task *asynq.Task) error {
 		ImageURL:  image.ImageUrl,
 		Tags:      image.Tags,
 		CreatedAt: image.CreatedAt.Time,
+		Uploader: &webhookpayload.User{
+			ID: image.UploaderID, Username: image.UploaderUsername,
+		},
+	}
+	initiator := &webhookpayload.User{
+		ID: image.InitiatorID, Username: image.InitiatorUsername,
+	}
+	if args.EventType == db.WebhookUpdateEvent {
+		previous, err := db.Query().GetPreviousImageVersionForWebhook(ctx, sqlc.GetPreviousImageVersionForWebhookParams{
+			ImageID: image.ImageID,
+			Version: image.Version,
+		})
+		if err != nil {
+			return err
+		}
+		body.Changes = webhookpayload.Compare(RequestBody{
+			Text: previous.Text, Rating: previous.Rating, Tags: previous.Tags,
+		}, body)
 	}
 
 	for i := range webhooks {
-		err := EnqueueInvoke(ctx, webhooks[i].ID, image.ImageID, image.Version, args.EventType, body)
+		err := EnqueueInvoke(ctx, webhooks[i].ID, image.ImageID, image.Version, args.EventType, body, initiator)
 		if err != nil {
 			return err
 		}
@@ -249,11 +273,6 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 	if err != nil {
 		return err
 	}
-	invocationBody, err := buildInvocationBody(args.EventType, bodyBytes)
-	if err != nil {
-		return err
-	}
-
 	webhook, err := db.Query().GetWebhook(ctx, args.WebhookID)
 
 	if err != nil {
@@ -261,6 +280,14 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 	}
 	if !webhook.Active {
 		return nil
+	}
+	invocationBody, err := buildInvocationBody(args.EventType, bodyBytes, webhook.BodyTemplate.String, args.Initiator)
+	if err != nil {
+		recordErr := db.Query().RecordWebhookFailure(ctx, sqlc.RecordWebhookFailureParams{
+			ID:           args.WebhookID,
+			FailureCount: WebhookMaxFailures,
+		})
+		return errors.Join(err, recordErr)
 	}
 
 	hash := hmac.New(sha256.New, []byte(webhook.Secret))
