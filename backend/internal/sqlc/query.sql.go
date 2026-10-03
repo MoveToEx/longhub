@@ -423,12 +423,12 @@ WHERE user_id = $1
 `
 
 type GetAppKeysByUserRow struct {
-	ID              int64            `json:"id"`
-	CreatedAt       pgtype.Timestamp `json:"createdAt"`
-	Label           string           `json:"label"`
-	UserID          int64            `json:"userId"`
-	Permission      int64            `json:"permission"`
-	LastActivatedAt pgtype.Timestamp `json:"lastActivatedAt"`
+	ID              int64              `json:"id"`
+	CreatedAt       pgtype.Timestamptz `json:"createdAt"`
+	Label           string             `json:"label"`
+	UserID          int64              `json:"userId"`
+	Permission      int64              `json:"permission"`
+	LastActivatedAt pgtype.Timestamptz `json:"lastActivatedAt"`
 }
 
 func (q *Queries) GetAppKeysByUser(ctx context.Context, userID int64) ([]GetAppKeysByUserRow, error) {
@@ -558,15 +558,15 @@ type GetFavoriteImagesParams struct {
 }
 
 type GetFavoriteImagesRow struct {
-	Shortcut    pgtype.Text      `json:"shortcut"`
-	FavoritedAt pgtype.Timestamp `json:"favoritedAt"`
-	UserID      int64            `json:"userId"`
-	ID          int64            `json:"id"`
-	ImageKey    string           `json:"imageKey"`
-	ImageUrl    string           `json:"imageUrl"`
-	Text        string           `json:"text"`
-	Rating      Rating           `json:"rating"`
-	Version     int32            `json:"version"`
+	Shortcut    pgtype.Text        `json:"shortcut"`
+	FavoritedAt pgtype.Timestamptz `json:"favoritedAt"`
+	UserID      int64              `json:"userId"`
+	ID          int64              `json:"id"`
+	ImageKey    string             `json:"imageKey"`
+	ImageUrl    string             `json:"imageUrl"`
+	Text        string             `json:"text"`
+	Rating      Rating             `json:"rating"`
+	Version     int32              `json:"version"`
 }
 
 func (q *Queries) GetFavoriteImages(ctx context.Context, arg GetFavoriteImagesParams) ([]GetFavoriteImagesRow, error) {
@@ -689,15 +689,15 @@ WHERE i.id = $1 AND i.deleted_at IS NULL LIMIT 1
 `
 
 type GetImageRow struct {
-	ID               int64            `json:"id"`
-	Text             string           `json:"text"`
-	Rating           Rating           `json:"rating"`
-	ImageUrl         string           `json:"imageUrl"`
-	ImageKey         string           `json:"imageKey"`
-	CreatedAt        pgtype.Timestamp `json:"createdAt"`
-	UserIdentifier   UserIdentifier   `json:"userIdentifier"`
-	CurrentVersionID pgtype.Int8      `json:"currentVersionId"`
-	Version          int32            `json:"version"`
+	ID               int64              `json:"id"`
+	Text             string             `json:"text"`
+	Rating           Rating             `json:"rating"`
+	ImageUrl         string             `json:"imageUrl"`
+	ImageKey         string             `json:"imageKey"`
+	CreatedAt        pgtype.Timestamptz `json:"createdAt"`
+	UserIdentifier   UserIdentifier     `json:"userIdentifier"`
+	CurrentVersionID pgtype.Int8        `json:"currentVersionId"`
+	Version          int32              `json:"version"`
 }
 
 func (q *Queries) GetImage(ctx context.Context, id int64) (GetImageRow, error) {
@@ -755,17 +755,17 @@ type GetImageVersionForWebhookParams struct {
 }
 
 type GetImageVersionForWebhookRow struct {
-	ImageID           int64            `json:"imageId"`
-	ImageUrl          string           `json:"imageUrl"`
-	CreatedAt         pgtype.Timestamp `json:"createdAt"`
-	Text              string           `json:"text"`
-	Rating            Rating           `json:"rating"`
-	Version           int32            `json:"version"`
-	UploaderID        int64            `json:"uploaderId"`
-	UploaderUsername  string           `json:"uploaderUsername"`
-	InitiatorID       int64            `json:"initiatorId"`
-	InitiatorUsername string           `json:"initiatorUsername"`
-	Tags              []string         `json:"tags"`
+	ImageID           int64              `json:"imageId"`
+	ImageUrl          string             `json:"imageUrl"`
+	CreatedAt         pgtype.Timestamptz `json:"createdAt"`
+	Text              string             `json:"text"`
+	Rating            Rating             `json:"rating"`
+	Version           int32              `json:"version"`
+	UploaderID        int64              `json:"uploaderId"`
+	UploaderUsername  string             `json:"uploaderUsername"`
+	InitiatorID       int64              `json:"initiatorId"`
+	InitiatorUsername string             `json:"initiatorUsername"`
+	Tags              []string           `json:"tags"`
 }
 
 func (q *Queries) GetImageVersionForWebhook(ctx context.Context, arg GetImageVersionForWebhookParams) (GetImageVersionForWebhookRow, error) {
@@ -803,15 +803,15 @@ ORDER BY v.created_at DESC
 `
 
 type GetImageVersionsRow struct {
-	ID             int64            `json:"id"`
-	CreatedAt      pgtype.Timestamp `json:"createdAt"`
-	ImageID        int64            `json:"imageId"`
-	Version        int32            `json:"version"`
-	Text           string           `json:"text"`
-	Rating         Rating           `json:"rating"`
-	UserID         int64            `json:"userId"`
-	UserIdentifier UserIdentifier   `json:"userIdentifier"`
-	Tags           []string         `json:"tags"`
+	ID             int64              `json:"id"`
+	CreatedAt      pgtype.Timestamptz `json:"createdAt"`
+	ImageID        int64              `json:"imageId"`
+	Version        int32              `json:"version"`
+	Text           string             `json:"text"`
+	Rating         Rating             `json:"rating"`
+	UserID         int64              `json:"userId"`
+	UserIdentifier UserIdentifier     `json:"userIdentifier"`
+	Tags           []string           `json:"tags"`
 }
 
 func (q *Queries) GetImageVersions(ctx context.Context, imageID int64) ([]GetImageVersionsRow, error) {
@@ -952,9 +952,9 @@ WHERE id = $1
 `
 
 type GetOtherRow struct {
-	ID        int64            `json:"id"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	Username  string           `json:"username"`
+	ID        int64              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"createdAt"`
+	Username  string             `json:"username"`
 }
 
 func (q *Queries) GetOther(ctx context.Context, id int64) (GetOtherRow, error) {
@@ -970,11 +970,11 @@ WHERE user_id = $1
 `
 
 type GetPasskeyRow struct {
-	ID        []byte           `json:"id"`
-	Name      string           `json:"name"`
-	UserID    int64            `json:"userId"`
-	Aaguid    pgtype.UUID      `json:"aaguid"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
+	ID        []byte             `json:"id"`
+	Name      string             `json:"name"`
+	UserID    int64              `json:"userId"`
+	Aaguid    pgtype.UUID        `json:"aaguid"`
+	CreatedAt pgtype.Timestamptz `json:"createdAt"`
 }
 
 func (q *Queries) GetPasskey(ctx context.Context, userID int64) ([]GetPasskeyRow, error) {
@@ -1245,16 +1245,16 @@ type GetUnindexedVersionParams struct {
 }
 
 type GetUnindexedVersionRow struct {
-	ID        int64            `json:"id"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	ImageID   int64            `json:"imageId"`
-	Version   int32            `json:"version"`
-	Text      string           `json:"text"`
-	Rating    Rating           `json:"rating"`
-	UserID    int64            `json:"userId"`
-	Image     Image            `json:"image"`
-	Uploader  string           `json:"uploader"`
-	Tags      []string         `json:"tags"`
+	ID        int64              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"createdAt"`
+	ImageID   int64              `json:"imageId"`
+	Version   int32              `json:"version"`
+	Text      string             `json:"text"`
+	Rating    Rating             `json:"rating"`
+	UserID    int64              `json:"userId"`
+	Image     Image              `json:"image"`
+	Uploader  string             `json:"uploader"`
+	Tags      []string           `json:"tags"`
 }
 
 // #endregion
@@ -1336,16 +1336,16 @@ WHERE k.key = $1
 `
 
 type GetUserByAppKeyRow struct {
-	ID            int64            `json:"id"`
-	CreatedAt     pgtype.Timestamp `json:"createdAt"`
-	Email         string           `json:"email"`
-	Username      string           `json:"username"`
-	Permission    int64            `json:"permission"`
-	PasswordHash  []byte           `json:"passwordHash"`
-	Handle        []byte           `json:"handle"`
-	Preference    types.Preference `json:"preference"`
-	KeyID         int64            `json:"keyId"`
-	KeyPermission int64            `json:"keyPermission"`
+	ID            int64              `json:"id"`
+	CreatedAt     pgtype.Timestamptz `json:"createdAt"`
+	Email         string             `json:"email"`
+	Username      string             `json:"username"`
+	Permission    int64              `json:"permission"`
+	PasswordHash  []byte             `json:"passwordHash"`
+	Handle        []byte             `json:"handle"`
+	Preference    types.Preference   `json:"preference"`
+	KeyID         int64              `json:"keyId"`
+	KeyPermission int64              `json:"keyPermission"`
 }
 
 // #endregion

@@ -143,36 +143,36 @@ func (ns NullUploadStatus) Value() (driver.Value, error) {
 }
 
 type Appkey struct {
-	ID              int64            `json:"id"`
-	Label           string           `json:"label"`
-	CreatedAt       pgtype.Timestamp `json:"createdAt"`
-	UserID          int64            `json:"userId"`
-	Permission      int64            `json:"permission"`
-	LastActivatedAt pgtype.Timestamp `json:"lastActivatedAt"`
-	Key             string           `json:"key"`
+	ID              int64              `json:"id"`
+	Label           string             `json:"label"`
+	CreatedAt       pgtype.Timestamptz `json:"createdAt"`
+	UserID          int64              `json:"userId"`
+	Permission      int64              `json:"permission"`
+	LastActivatedAt pgtype.Timestamptz `json:"lastActivatedAt"`
+	Key             string             `json:"key"`
 }
 
 type Deletion struct {
-	ID          int64            `json:"id"`
-	CreatedAt   pgtype.Timestamp `json:"createdAt"`
-	ProcessedAt pgtype.Timestamp `json:"processedAt"`
-	ImageID     int64            `json:"imageId"`
-	Reason      string           `json:"reason"`
-	Status      DeletionStatus   `json:"status"`
+	ID          int64              `json:"id"`
+	CreatedAt   pgtype.Timestamptz `json:"createdAt"`
+	ProcessedAt pgtype.Timestamptz `json:"processedAt"`
+	ImageID     int64              `json:"imageId"`
+	Reason      string             `json:"reason"`
+	Status      DeletionStatus     `json:"status"`
 }
 
 type Image struct {
-	ID               int64            `json:"id"`
-	CreatedAt        pgtype.Timestamp `json:"createdAt"`
-	UpdatedAt        pgtype.Timestamp `json:"updatedAt"`
-	DeletedAt        pgtype.Timestamp `json:"deletedAt"`
-	UserID           int64            `json:"userId"`
-	ImageKey         string           `json:"imageKey"`
-	ImageUrl         string           `json:"imageUrl"`
-	ImageHash        pgtype.Text      `json:"imageHash"`
-	ActiveDeletionID pgtype.Int8      `json:"activeDeletionId"`
-	CurrentVersionID pgtype.Int8      `json:"currentVersionId"`
-	IndexedVersion   pgtype.Int8      `json:"indexedVersion"`
+	ID               int64              `json:"id"`
+	CreatedAt        pgtype.Timestamptz `json:"createdAt"`
+	UpdatedAt        pgtype.Timestamptz `json:"updatedAt"`
+	DeletedAt        pgtype.Timestamptz `json:"deletedAt"`
+	UserID           int64              `json:"userId"`
+	ImageKey         string             `json:"imageKey"`
+	ImageUrl         string             `json:"imageUrl"`
+	ImageHash        pgtype.Text        `json:"imageHash"`
+	ActiveDeletionID pgtype.Int8        `json:"activeDeletionId"`
+	CurrentVersionID pgtype.Int8        `json:"currentVersionId"`
+	IndexedVersion   pgtype.Int8        `json:"indexedVersion"`
 }
 
 type ServerConfig struct {
@@ -186,46 +186,46 @@ type Tag struct {
 }
 
 type UploadSession struct {
-	ID          int64            `json:"id"`
-	CreatedAt   pgtype.Timestamp `json:"createdAt"`
-	CompletedAt pgtype.Timestamp `json:"completedAt"`
-	UserID      int64            `json:"userId"`
-	Key         string           `json:"key"`
-	Status      UploadStatus     `json:"status"`
+	ID          int64              `json:"id"`
+	CreatedAt   pgtype.Timestamptz `json:"createdAt"`
+	CompletedAt pgtype.Timestamptz `json:"completedAt"`
+	UserID      int64              `json:"userId"`
+	Key         string             `json:"key"`
+	Status      UploadStatus       `json:"status"`
 }
 
 type User struct {
-	ID           int64            `json:"id"`
-	CreatedAt    pgtype.Timestamp `json:"createdAt"`
-	Email        string           `json:"email"`
-	Username     string           `json:"username"`
-	Permission   int64            `json:"permission"`
-	PasswordHash []byte           `json:"passwordHash"`
-	Handle       []byte           `json:"handle"`
-	Preference   types.Preference `json:"preference"`
+	ID           int64              `json:"id"`
+	CreatedAt    pgtype.Timestamptz `json:"createdAt"`
+	Email        string             `json:"email"`
+	Username     string             `json:"username"`
+	Permission   int64              `json:"permission"`
+	PasswordHash []byte             `json:"passwordHash"`
+	Handle       []byte             `json:"handle"`
+	Preference   types.Preference   `json:"preference"`
 }
 
 type UserFavorite struct {
-	UserID      int64            `json:"userId"`
-	ImageID     int64            `json:"imageId"`
-	Shortcut    pgtype.Text      `json:"shortcut"`
-	FavoritedAt pgtype.Timestamp `json:"favoritedAt"`
+	UserID      int64              `json:"userId"`
+	ImageID     int64              `json:"imageId"`
+	Shortcut    pgtype.Text        `json:"shortcut"`
+	FavoritedAt pgtype.Timestamptz `json:"favoritedAt"`
 }
 
 type UserIdentifier struct {
-	ID        int64            `json:"id"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	Username  string           `json:"username"`
+	ID        int64              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"createdAt"`
+	Username  string             `json:"username"`
 }
 
 type Version struct {
-	ID        int64            `json:"id"`
-	CreatedAt pgtype.Timestamp `json:"createdAt"`
-	ImageID   int64            `json:"imageId"`
-	Version   int32            `json:"version"`
-	Text      string           `json:"text"`
-	Rating    Rating           `json:"rating"`
-	UserID    int64            `json:"userId"`
+	ID        int64              `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"createdAt"`
+	ImageID   int64              `json:"imageId"`
+	Version   int32              `json:"version"`
+	Text      string             `json:"text"`
+	Rating    Rating             `json:"rating"`
+	UserID    int64              `json:"userId"`
 }
 
 type VersionTag struct {
@@ -234,28 +234,28 @@ type VersionTag struct {
 }
 
 type WebauthnPasskey struct {
-	ID         []byte           `json:"id"`
-	Name       string           `json:"name"`
-	UserID     int64            `json:"userId"`
-	PublicKey  []byte           `json:"publicKey"`
-	SignCount  int64            `json:"signCount"`
-	Transports []string         `json:"transports"`
-	Flags      int16            `json:"flags"`
-	CreatedAt  pgtype.Timestamp `json:"createdAt"`
-	Aaguid     pgtype.UUID      `json:"aaguid"`
+	ID         []byte             `json:"id"`
+	Name       string             `json:"name"`
+	UserID     int64              `json:"userId"`
+	PublicKey  []byte             `json:"publicKey"`
+	SignCount  int64              `json:"signCount"`
+	Transports []string           `json:"transports"`
+	Flags      int16              `json:"flags"`
+	CreatedAt  pgtype.Timestamptz `json:"createdAt"`
+	Aaguid     pgtype.UUID        `json:"aaguid"`
 }
 
 type Webhook struct {
-	ID                 int64            `json:"id"`
-	Active             bool             `json:"active"`
-	CreatedAt          pgtype.Timestamp `json:"createdAt"`
-	UserID             int64            `json:"userId"`
-	EventTypes         int64            `json:"eventTypes"`
-	Label              string           `json:"label"`
-	Endpoint           string           `json:"endpoint"`
-	Secret             string           `json:"secret"`
-	LastActivatedAt    pgtype.Timestamp `json:"lastActivatedAt"`
-	LastResponseStatus pgtype.Int4      `json:"lastResponseStatus"`
-	FailureCount       int32            `json:"failureCount"`
-	BodyTemplate       pgtype.Text      `json:"bodyTemplate"`
+	ID                 int64              `json:"id"`
+	Active             bool               `json:"active"`
+	CreatedAt          pgtype.Timestamptz `json:"createdAt"`
+	UserID             int64              `json:"userId"`
+	EventTypes         int64              `json:"eventTypes"`
+	Label              string             `json:"label"`
+	Endpoint           string             `json:"endpoint"`
+	Secret             string             `json:"secret"`
+	LastActivatedAt    pgtype.Timestamptz `json:"lastActivatedAt"`
+	LastResponseStatus pgtype.Int4        `json:"lastResponseStatus"`
+	FailureCount       int32              `json:"failureCount"`
+	BodyTemplate       pgtype.Text        `json:"bodyTemplate"`
 }

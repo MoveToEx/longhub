@@ -27,7 +27,7 @@ CREATE TYPE "deletion_status" AS ENUM (
 
 CREATE TABLE IF NOT EXISTS "user" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	"email" VARCHAR(255) NOT NULL,
 	"username" VARCHAR(255) UNIQUE NOT NULL,
 	"permission" BIGINT NOT NULL DEFAULT 0,
@@ -45,9 +45,9 @@ SELECT "id", "created_at", "username" FROM public.user;
 
 CREATE TABLE IF NOT EXISTS "image" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-	"updated_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-	"deleted_at" TIMESTAMP,
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"deleted_at" TIMESTAMPTZ,
 	"user_id" BIGINT NOT NULL,
 	"image_key" TEXT NOT NULL,
 	"image_url" TEXT NOT NULL,
@@ -67,7 +67,7 @@ ON "image" ("indexed_version");
 
 CREATE TABLE IF NOT EXISTS "version" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	"image_id" BIGINT NOT NULL,
 	"version" INT NOT NULL DEFAULT 1,
 	"text" TEXT NOT NULL,
@@ -107,17 +107,17 @@ CREATE TABLE IF NOT EXISTS "user_favorite" (
 	"user_id" BIGINT NOT NULL,
 	"image_id" BIGINT NOT NULL,
 	"shortcut" VARCHAR(255),
-	"favorited_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+	"favorited_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	PRIMARY KEY("user_id", "image_id")
 );
 
 CREATE TABLE IF NOT EXISTS "appkey" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,
 	"label" TEXT NOT NULL DEFAULT 'New key',
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	"user_id" BIGINT NOT NULL,
 	"permission" BIGINT NOT NULL,
-	"last_activated_at" TIMESTAMP,
+	"last_activated_at" TIMESTAMPTZ,
 	"key" VARCHAR(255) UNIQUE NOT NULL,
 	PRIMARY KEY("id")
 );
@@ -126,13 +126,13 @@ CREATE TABLE IF NOT EXISTS "appkey" (
 CREATE TABLE IF NOT EXISTS "webhook" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,
 	"active" BOOLEAN NOT NULL DEFAULT TRUE,
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	"user_id" BIGINT NOT NULL,
 	"event_types" BIGINT NOT NULL DEFAULT 0,
 	"label" TEXT NOT NULL,
 	"endpoint" TEXT NOT NULL,
 	"secret" TEXT NOT NULL,
-	"last_activated_at" TIMESTAMP,
+	"last_activated_at" TIMESTAMPTZ,
 	"last_response_status" INTEGER,
 	"failure_count" INTEGER NOT NULL DEFAULT 0,
 	"body_template" TEXT,
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS "webauthn_passkey" (
 	"sign_count" BIGINT NOT NULL,
 	"transports" TEXT[],
 	"flags" SMALLINT NOT NULL,
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	"aaguid" UUID NOT NULL,
 	PRIMARY KEY("id")
 );
@@ -158,8 +158,8 @@ ON "appkey" ("key");
 
 CREATE TABLE IF NOT EXISTS "deletion" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-	"processed_at" TIMESTAMP,
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"processed_at" TIMESTAMPTZ,
 	"image_id" BIGINT NOT NULL,
 	"reason" TEXT NOT NULL,
 	"status" DELETION_STATUS NOT NULL,
@@ -169,8 +169,8 @@ CREATE TABLE IF NOT EXISTS "deletion" (
 
 CREATE TABLE IF NOT EXISTS "upload_session" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,
-	"created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-	"completed_at" TIMESTAMP,
+	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	"completed_at" TIMESTAMPTZ,
 	"user_id" BIGINT NOT NULL,
 	"key" VARCHAR(255) NOT NULL,
 	"status" UPLOAD_STATUS NOT NULL DEFAULT 'active',
