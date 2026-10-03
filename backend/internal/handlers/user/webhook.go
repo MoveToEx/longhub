@@ -252,27 +252,6 @@ func validateBodyTemplate(value pgtype.Text, eventTypes int64) error {
 	return nil
 }
 
-type PreviewWebhookPayload struct {
-	BodyTemplate string `json:"bodyTemplate"`
-	Event        string `json:"event" binding:"required,oneof=create update delete"`
-}
-
-func PreviewWebhook(c *gin.Context) {
-	var payload PreviewWebhookPayload
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		utils.ErrorResponse(c, 400, "Invalid preview request")
-		return
-	}
-	body, err := webhookpayload.Render(payload.BodyTemplate, payload.Event, webhookpayload.PreviewData(payload.Event), webhookpayload.PreviewInitiator(payload.Event))
-	if err != nil {
-		utils.ErrorResponse(c, 400, "%s", err.Error())
-		return
-	}
-	utils.SuccessResponse(c, struct {
-		Body json.RawMessage `json:"body"`
-	}{Body: body})
-}
-
 type DeleteWebhookPayload struct {
 	ID int64 `uri:"id"`
 }
