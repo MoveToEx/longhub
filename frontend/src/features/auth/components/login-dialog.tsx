@@ -225,7 +225,7 @@ export default function LoginDialog({
 
   return (
     <Dialog handle={handle} onOpenChangeComplete={() => setMethod('password')}>
-      <DialogContent>
+      <DialogContent mobileDrawer>
         <DialogHeader>
           <DialogTitle>
             <span className='text-xl'>Login</span>

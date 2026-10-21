@@ -89,7 +89,7 @@ export default function RegisterDialog() {
           Register
         </Button>
       } />
-      <DialogContent>
+      <DialogContent mobileDrawer>
         <DialogHeader>
           <DialogTitle>
             <span className='text-xl'>Register</span>

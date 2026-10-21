@@ -30,7 +30,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
-      className={cn("data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50", className)}
+      className={cn("data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-black/50 duration-100 fixed inset-0 isolate z-50", className)}
       {...props}
     />
   )
@@ -40,21 +40,54 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  mobileDrawer = false,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  mobileDrawer?: boolean
 }) {
+  const dragStartY = React.useRef<number | null>(null)
+
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay forceRender={mobileDrawer} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 ring-foreground/10 grid max-w-[calc(100%-2rem)] gap-6 rounded-xl p-6 text-sm ring-1 duration-100 sm:max-w-md fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none",
+          "bg-background data-open:animate-in data-closed:animate-out ring-foreground/10 fixed z-50 grid w-full gap-6 p-6 text-sm ring-1 outline-none",
+          mobileDrawer
+            ? "inset-x-0 bottom-0 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain rounded-none pt-10 pb-[max(1.5rem,env(safe-area-inset-bottom))] duration-300 data-open:slide-in-from-bottom data-closed:slide-out-to-bottom motion-reduce:animate-none md:inset-x-auto md:bottom-auto md:top-1/2 md:left-1/2 md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:pt-6 md:pb-6 md:duration-100 md:data-open:slide-in-from-bottom-0 md:data-closed:slide-out-to-bottom-0 md:data-open:fade-in-0 md:data-closed:fade-out-0 md:data-open:zoom-in-95 md:data-closed:zoom-out-95"
+            : "top-1/2 left-1/2 max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl duration-100 data-open:fade-in-0 data-closed:fade-out-0 data-open:zoom-in-95 data-closed:zoom-out-95 sm:max-w-md",
           className
         )}
         {...props}
       >
+        {mobileDrawer && (
+          <DialogPrimitive.Close
+            data-slot="drawer-handle"
+            aria-label="Drag down to close drawer"
+            className="absolute inset-x-0 top-0 flex h-10 touch-none cursor-grab items-center justify-center outline-none select-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing md:hidden"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return
+              dragStartY.current = event.clientY
+              event.currentTarget.setPointerCapture(event.pointerId)
+            }}
+            onPointerUp={(event) => {
+              const startY = dragStartY.current
+              dragStartY.current = null
+              if (startY !== null && event.clientY - startY >= 48) {
+                event.currentTarget.click()
+              }
+            }}
+            onPointerCancel={() => { dragStartY.current = null }}
+            onClick={(event) => {
+              // Pointer dismissal requires a downward drag; keyboard activation still closes.
+              if (event.detail !== 0) event.preventBaseUIHandler()
+            }}
+          >
+            <span aria-hidden="true" className="bg-muted-foreground/30 h-1 w-12 rounded-full" />
+          </DialogPrimitive.Close>
+        )}
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
@@ -62,7 +95,7 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-4 right-4"
+                className={cn("absolute top-4 right-4", mobileDrawer && "hidden md:inline-flex")}
                 size="icon-sm"
               />
             }
