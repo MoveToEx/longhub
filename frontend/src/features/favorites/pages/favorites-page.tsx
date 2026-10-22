@@ -1,51 +1,16 @@
-import { Button } from "@/shared/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/shared/components/ui/hover-card";
 import { Pagination } from "@/shared/components/ui/pagination";
 import { Spinner } from "@/shared/components/ui/spinner";
 import useFavorites from "@/features/favorites/hooks/use-favorites"
-import { copyImage } from "@/shared/lib/utils";
-import { Bookmark, Copy } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Bookmark } from "lucide-react";
+import { useMemo } from "react";
 import { useSearchParams } from "react-router";
-import { toast } from "sonner";
 import { RequiresLogin } from "@/shared/components/utils";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/shared/components/ui/empty";
 import LikeButton from "@/features/images/components/like-button";
+import ImageGridItem from "@/features/images/components/image-grid-item";
 
 const PAGE_SIZE = 24;
-
-function CopyButton({
-  url
-}: {
-  url: string,
-}) {
-  const [loading, setLoading] = useState(false);
-
-  return (
-    <Button
-      variant='outline'
-      disabled={loading}
-      onClick={async () => {
-        setLoading(true);
-        try {
-          await copyImage(url);
-          toast.success('Copied to clipboard');
-        }
-        catch (e) {
-          if (e instanceof Error) {
-            toast.error(e.message);
-          }
-        }
-        finally {
-          setLoading(false);
-        }
-      }}>
-      {loading && <Spinner />}
-      {loading || <Copy />}
-      Copy
-    </Button>
-  )
-}
 
 function Image({ id, imageUrl, shortcut, date }: {
   id: number,
@@ -54,29 +19,30 @@ function Image({ id, imageUrl, shortcut, date }: {
   date: Date,
 }) {
   return (
-    <HoverCard>
-      <HoverCardTrigger delay={100} closeDelay={100} render={
-        <img src={imageUrl} className='w-full h-48 object-contain object-center' crossOrigin="anonymous" />
-      } />
-      <HoverCardContent className='flex flex-col items-center gap-4 w-72'>
-        <div className='w-full flex flex-col items-center gap-2'>
-          <div>
-            Shortcut: {shortcut === null ? <i className='text-muted-foreground'>null</i> : (
-              <span className='border-accent-foreground border bg-accent font-mono py-0.5 px-1 rounded-sm'>
-                {shortcut}
-              </span>
-            )}
+    <ImageGridItem imageUrl={imageUrl}>
+      <HoverCard>
+        <HoverCardTrigger delay={100} closeDelay={100} render={
+          <img src={imageUrl} alt='Image' className='w-full h-48 object-contain object-center' crossOrigin="anonymous" />
+        } />
+        <HoverCardContent className='flex flex-col items-center gap-4 w-72'>
+          <div className='w-full flex flex-col items-center gap-2'>
+            <div>
+              Shortcut: {shortcut === null ? <i className='text-muted-foreground'>null</i> : (
+                <span className='border-accent-foreground border bg-accent font-mono py-0.5 px-1 rounded-sm'>
+                  {shortcut}
+                </span>
+              )}
+            </div>
+            <div>
+              Favorited on {date.toDateString()}
+            </div>
           </div>
-          <div>
-            Favorited on {date.toDateString()}
+          <div className='flex flex-row justify-evenly gap-4 mx-4'>
+            <LikeButton id={id} />
           </div>
-        </div>
-        <div className='flex flex-row justify-evenly gap-4 mx-4'>
-          <LikeButton id={id} />
-          <CopyButton url={imageUrl} />
-        </div>
-      </HoverCardContent>
-    </HoverCard>
+        </HoverCardContent>
+      </HoverCard>
+    </ImageGridItem>
   )
 }
 

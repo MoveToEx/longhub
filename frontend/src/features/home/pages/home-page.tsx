@@ -2,6 +2,7 @@ import { Spinner } from "@/shared/components/ui/spinner";
 import useAuth from "@/features/auth/hooks/use-auth";
 import useFavoriteTags from "@/features/favorites/hooks/use-favorite-tags";
 import useImages from "@/features/images/hooks/use-images";
+import ImageGridItem from "@/features/images/components/image-grid-item";
 import type { Image, Tag } from "@/shared/lib/types";
 import { Link } from "react-router";
 
@@ -11,9 +12,11 @@ function ImageGrid({ items }: {
   return (
     <div className='grid w-full grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6'>
       {items.map(({ id, imageUrl }) => (
-        <Link key={id} to={`/image/${id}`}>
-          <img className='object-contain object-center w-full h-32' src={imageUrl} alt='Image' crossOrigin="anonymous" />
-        </Link>
+        <ImageGridItem key={id} imageUrl={imageUrl}>
+          <Link to={`/image/${id}`}>
+            <img className='object-contain object-center w-full h-32' src={imageUrl} alt='Image' crossOrigin="anonymous" />
+          </Link>
+        </ImageGridItem>
       ))}
     </div>
   )
