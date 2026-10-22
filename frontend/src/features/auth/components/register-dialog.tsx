@@ -8,7 +8,8 @@ import {
   FieldLabel,
 } from "@/shared/components/ui/field"
 import { Input } from "@/shared/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/shared/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/shared/components/ui/dialog";
+import { ResponsiveDialogCancel, ResponsiveDialogContent } from "@/shared/components/ui/responsive-dialog";
 import { Dialog as BaseDialog } from '@base-ui/react'
 import { Button } from "@/shared/components/ui/button";
 import api from "@/shared/lib/axios";
@@ -89,7 +90,7 @@ export default function RegisterDialog() {
           Register
         </Button>
       } />
-      <DialogContent mobileDrawer>
+      <ResponsiveDialogContent>
         <DialogHeader>
           <DialogTitle>
             <span className='text-xl'>Register</span>
@@ -199,10 +200,10 @@ export default function RegisterDialog() {
               {loading && <Spinner />}
               Register
             </Button>
-            <DialogClose render={<Button variant='outline'>Cancel</Button>} />
+            <ResponsiveDialogCancel />
           </DialogFooter>
         </form>
-      </DialogContent>
+      </ResponsiveDialogContent>
     </Dialog>
   )
 }

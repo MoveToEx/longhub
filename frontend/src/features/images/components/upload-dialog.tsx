@@ -6,7 +6,8 @@ import { Controller, useForm } from 'react-hook-form';
 import z from 'zod';
 import { Button } from "@/shared/components/ui/button";
 import { ChevronLeft, ChevronRight, FileTypeCorner, Send, Trash, UploadIcon, X } from "lucide-react";
-import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/shared/components/ui/dialog";
+import { Dialog, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/shared/components/ui/dialog";
+import { ResponsiveDialogCancel, ResponsiveDialogContent } from "@/shared/components/ui/responsive-dialog";
 import DragDrop from '@/shared/components/drag-drop';
 import api from '@/shared/lib/axios';
 import type { Rating, SignResponse, Wrapped } from '@/shared/lib/types';
@@ -99,7 +100,7 @@ export default function UploadDialog() {
   return (
     <Dialog open={open} onOpenChange={val => setOpen(val)}>
       <UploadTrigger />
-      <DialogContent className='min-h-64 sm:min-w-2xl'>
+      <ResponsiveDialogContent className='min-h-64 md:min-w-2xl'>
         <DialogHeader>
           <DialogTitle className='text-lg'>
             Upload
@@ -248,13 +249,11 @@ export default function UploadDialog() {
             {loading && <Spinner />}
             Submit
           </Button>
-          <DialogClose render={
-            <Button variant='outline' onClick={() => setOpen(false)}>
-              <X /> Cancel
-            </Button>
-          } />
+          <ResponsiveDialogCancel>
+            <X /> Cancel
+          </ResponsiveDialogCancel>
         </DialogFooter>
-      </DialogContent>
+      </ResponsiveDialogContent>
     </Dialog>
   )
 }

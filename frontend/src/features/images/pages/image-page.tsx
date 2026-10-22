@@ -10,7 +10,8 @@ import pluralize from 'pluralize'
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
 import { useEffect, useMemo, useState } from "react";
 import api from "@/shared/lib/axios";
-import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog";
+import { Dialog, DialogFooter, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog";
+import { ResponsiveDialogCancel, ResponsiveDialogContent } from "@/shared/components/ui/responsive-dialog";
 import { Dialog as BaseDialog } from '@base-ui/react'
 import { toast } from "sonner";
 import { mutate } from "@/shared/lib/swr";
@@ -97,7 +98,7 @@ function EditDialog({ handle }: { handle: BaseDialog.Handle<Payload> }) {
         }, [payload, form]);
 
         return (
-          <DialogContent>
+          <ResponsiveDialogContent>
             <DialogHeader>
               <DialogTitle className='text-xl'>
                 Edit image metadata
@@ -170,16 +171,10 @@ function EditDialog({ handle }: { handle: BaseDialog.Handle<Payload> }) {
                   {loading && <Spinner />}
                   {loading || <Check />} Submit
                 </Button>
-                <DialogClose
-                  disabled={loading}
-                  render={
-                    <Button variant='outline'>
-                      Cancel
-                    </Button>
-                  } />
+                <ResponsiveDialogCancel disabled={loading} />
               </DialogFooter>
             </form>
-          </DialogContent>
+          </ResponsiveDialogContent>
         )
       }}
     </Dialog>

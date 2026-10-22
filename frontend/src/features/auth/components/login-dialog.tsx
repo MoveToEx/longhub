@@ -11,7 +11,8 @@ import {
 } from "@/shared/components/ui/field"
 import { Input } from "@/shared/components/ui/input"
 import { Dialog as BaseDialog } from '@base-ui/react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/shared/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/shared/components/ui/dialog";
+import { ResponsiveDialogCancel, ResponsiveDialogContent } from "@/shared/components/ui/responsive-dialog";
 import { Button } from "@/shared/components/ui/button";
 import api from "@/shared/lib/axios";
 import { toast } from "sonner";
@@ -143,7 +144,7 @@ function PasswordLogin({
           {loading || <LogIn />}
           Login
         </Button>
-        <DialogClose render={<Button variant='outline'>Cancel</Button>} />
+        <ResponsiveDialogCancel />
       </DialogFooter>
     </form>
   )
@@ -225,7 +226,7 @@ export default function LoginDialog({
 
   return (
     <Dialog handle={handle} onOpenChangeComplete={() => setMethod('password')}>
-      <DialogContent mobileDrawer>
+      <ResponsiveDialogContent>
         <DialogHeader>
           <DialogTitle>
             <span className='text-xl'>Login</span>
@@ -237,7 +238,7 @@ export default function LoginDialog({
 
         {method === 'password' && <PasswordLogin handle={handle} onMethodChange={val => setMethod(val)} />}
         {method === 'webauthn' && <WebAuthnLogin handle={handle} onMethodChange={val => setMethod(val)} />}
-      </DialogContent>
+      </ResponsiveDialogContent>
     </Dialog>
   )
 }

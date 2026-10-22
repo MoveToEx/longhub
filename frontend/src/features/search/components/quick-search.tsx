@@ -1,4 +1,5 @@
-import { Dialog, DialogContent, DialogTrigger } from "@/shared/components/ui/dialog";
+import { Dialog, DialogTitle, DialogTrigger } from "@/shared/components/ui/dialog";
+import { ResponsiveDialogContent } from "@/shared/components/ui/responsive-dialog";
 import { Dialog as BaseDialog } from '@base-ui/react';
 import { Button } from "@base-ui/react";
 import { Bookmark, Search } from "lucide-react";
@@ -33,7 +34,7 @@ export default function QuickSearch() {
       }
     }}>
       <DialogTrigger render={
-        <Button className='xs:hidden md:flex w-12 md:w-48 rounded-md border border-gray-300 text-sm py-2 px-4 flex flex-row items-center justify-start gap-2 cursor-text text-muted-foreground hover:text-foreground'>
+        <Button aria-label='Quick search' className='xs:hidden md:flex w-12 md:w-48 rounded-md border border-gray-300 text-sm py-2 px-4 flex flex-row items-center justify-start gap-2 cursor-text text-muted-foreground hover:text-foreground'>
           <Search className='inline' size={16} />
           <span className='md:block hidden'>
             Quick search...
@@ -41,7 +42,8 @@ export default function QuickSearch() {
         </Button>
       } />
 
-      <DialogContent className='border-4 border-gray-100 sm:max-w-xl p-2 gap-2' showCloseButton={false}>
+      <ResponsiveDialogContent className='gap-2 px-4 md:max-w-xl md:border-4 md:border-gray-100 md:p-2' showCloseButton={false}>
+        <DialogTitle className='sr-only'>Quick search</DialogTitle>
         <InputGroup>
           <InputGroupInput
             placeholder='Search anything...'
@@ -100,7 +102,7 @@ export default function QuickSearch() {
           )}
         </div>
 
-      </DialogContent>
+      </ResponsiveDialogContent>
     </Dialog>
   )
 }
