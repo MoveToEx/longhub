@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/shared/co
 import { Spinner } from "@/shared/components/ui/spinner";
 import useImage from "@/features/images/hooks/use-image";
 import useImageVersions from "@/features/images/hooks/use-image-versions";
-import { Check, ChevronDownIcon, Copy, Download, Edit, Hash, Pilcrow, ShieldAlert } from "lucide-react";
+import { Check, ChevronDownIcon, Copy, Download, Edit } from "lucide-react";
 import { useParams } from "react-router"
 import pluralize from 'pluralize'
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
@@ -15,7 +15,6 @@ import { ResponsiveDialogCancel, ResponsiveDialogContent } from "@/shared/compon
 import { Dialog as BaseDialog } from '@base-ui/react'
 import { toast } from "sonner";
 import { mutate } from "@/shared/lib/swr";
-import Tags from "@/features/tags/components/tags";
 import z from "zod";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,6 +25,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/shared/components/ui/toggle-grou
 import type { Rating } from "@/shared/lib/types";
 import _ from "lodash";
 import LikeButton from "../components/like-button";
+import ImageMetadata from "../components/image-metadata";
 import { copyImage, formatError } from "@/shared/lib/utils";
 
 
@@ -245,15 +245,11 @@ function Info({ id }: { id: number }) {
             <div>
               Image #{data.id}
             </div>
-            <div>
-              <Pilcrow size={12} className='inline' /> {data.text || <span className='italic'>(no text)</span>}
-            </div>
-            <div>
-              <Hash size={12} className='inline' /> <Tags value={data.tags.map(it => it.name)} />
-            </div>
-            <div>
-              <ShieldAlert size={12} className='inline' /> Rated as {data.rating}
-            </div>
+            <ImageMetadata
+              text={data.text}
+              tags={data.tags.map(it => it.name)}
+              rating={data.rating}
+            />
             <div>
               Created at {new Date(data.createdAt).toLocaleDateString()} by {data.userIdentifier.username}
             </div>
@@ -321,49 +317,7 @@ function Versions({ id }: { id: number }) {
                         Version {it.version}
                       </span>
                       <div className='min-w-0 flex flex-col px-2 py-1 gap-2 [overflow-wrap:anywhere]'>
-                        <table className='w-full table-fixed border-collapse'>
-                          <colgroup>
-                            <col className='w-5' />
-                            <col />
-                          </colgroup>
-                          <tbody>
-                            <tr>
-                              <td className='pt-2 align-top'>
-                                <Pilcrow size={12} />
-                              </td>
-                              <td className='py-1 align-top'>
-                                {it.text || <span className='italic'>(no text)</span>}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className='py-1 align-top'>
-                                <div className={`flex h-lh items-center ${it.tags.length > 0 ? 'box-content border-y border-transparent py-1' : ''}`}>
-                                  <Hash size={12} />
-                                </div>
-                              </td>
-                              <td className='py-1 align-top'>
-                                <div className='flex flex-wrap items-center gap-1'>
-                                  {it.tags.map(name => (
-                                    <span key={name} className='min-w-0 max-w-full px-2 py-1 rounded-md bg-accent border'>
-                                      {name}
-                                    </span>
-                                  ))}
-                                  {it.tags.length === 0 && (
-                                    <span className='italic text-accent-foreground'>(No tags)</span>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className='pt-2 align-top'>
-                                <ShieldAlert size={12} />
-                              </td>
-                              <td className='py-1 align-top'>
-                                Rated as {it.rating}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
+                        <ImageMetadata text={it.text} tags={it.tags} rating={it.rating} />
                         <span className='text-secondary-foreground text-sm'>
                           Created at {new Date(it.createdAt).toLocaleDateString()} by {it.userIdentifier.username}
                         </span>
