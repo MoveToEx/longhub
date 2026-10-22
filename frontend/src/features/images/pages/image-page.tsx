@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/shared/co
 import { Spinner } from "@/shared/components/ui/spinner";
 import useImage from "@/features/images/hooks/use-image";
 import useImageVersions from "@/features/images/hooks/use-image-versions";
-import { Check, ChevronDownIcon, Copy, Download, Edit, Hash, InfoIcon, Pilcrow, ShieldAlert, Undo2 } from "lucide-react";
+import { Check, ChevronDownIcon, Copy, Download, Edit, Hash, Pilcrow, ShieldAlert } from "lucide-react";
 import { useParams } from "react-router"
 import pluralize from 'pluralize'
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
@@ -15,7 +15,6 @@ import { Dialog as BaseDialog } from '@base-ui/react'
 import { toast } from "sonner";
 import { mutate } from "@/shared/lib/swr";
 import Tags from "@/features/tags/components/tags";
-import useAuth from "@/features/auth/hooks/use-auth";
 import z from "zod";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,7 +25,6 @@ import { ToggleGroup, ToggleGroupItem } from "@/shared/components/ui/toggle-grou
 import type { Rating } from "@/shared/lib/types";
 import _ from "lodash";
 import LikeButton from "../components/like-button";
-import { Alert, AlertDescription } from "@/shared/components/ui/alert";
 import { copyImage, formatError } from "@/shared/lib/utils";
 
 
@@ -35,87 +33,6 @@ type Payload = {
   rating: string,
   tags: string[],
   text: string,
-}
-
-function RevertDialog({ handle }: { handle: BaseDialog.Handle<Payload> }) {
-  const [loading, setLoading] = useState(false);
-
-  const submit = async ({ id, text, rating, tags }: Payload) => {
-    if (!Number.isSafeInteger(id)) return;
-
-    setLoading(true);
-
-    try {
-      await api.patch(`/image/${id}`, { text, rating, tags });
-      await mutate('image');
-      handle.close();
-      toast.success('Success');
-    }
-    catch (e) {
-      toast.error(formatError(e));
-    }
-    finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Dialog<Payload> handle={handle}>
-      {({ payload }) => {
-        return (
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className='text-xl'>
-                Confirm reversion
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className='flex flex-col items-start gap-2'>
-              <div>
-                You're about to revert image to the following state:
-              </div>
-              <ul className='flex flex-col gap-1 mb-4'>
-                <li>
-                  <Pilcrow size={12} className='inline' /> Text: {payload?.text}
-                </li>
-                <li>
-                  <Hash size={12} className='inline' /> Tags:
-                  <Tags value={payload?.tags ?? []} />
-                </li>
-                <li>
-                  <ShieldAlert size={12} className='inline' /> Rating: {payload?.rating}
-                </li>
-              </ul>
-
-              <Alert>
-                <InfoIcon />
-                <AlertDescription>
-                  Reverting will create a new version with desired metadata, instead of deleting all versions after it.
-                </AlertDescription>
-              </Alert>
-            </div>
-
-            <DialogFooter>
-              <Button
-                variant='destructive'
-                disabled={loading}
-                onClick={() => payload && submit(payload)}>
-                {loading && <Spinner />}
-                {loading || <Check />} Confirm
-              </Button>
-              <DialogClose
-                disabled={loading}
-                render={
-                  <Button variant='outline'>
-                    Cancel
-                  </Button>
-                } />
-            </DialogFooter>
-          </DialogContent>
-        )
-      }}
-    </Dialog>
-  )
 }
 
 const editSchema = z.object({
@@ -334,7 +251,7 @@ function Info({ id }: { id: number }) {
               Image #{data.id}
             </div>
             <div>
-              <Pilcrow size={12} className='inline' /> Text: {data.text}
+              <Pilcrow size={12} className='inline' /> {data.text ? <>Text: {data.text}</> : <span className='italic'>(no text)</span>}
             </div>
             <div>
               <Hash size={12} className='inline' /> Tags: <Tags value={data.tags.map(it => it.name)} />
@@ -378,11 +295,8 @@ function Info({ id }: { id: number }) {
   )
 }
 
-const revertHandle = BaseDialog.createHandle<Payload>();
-
 function Versions({ id }: { id: number }) {
   const { data, isLoading } = useImageVersions(id);
-  const { data: user } = useAuth();
 
   return (
     <Card className='py-2 rounded-md'>
@@ -405,54 +319,61 @@ function Versions({ id }: { id: number }) {
 
             <CollapsibleContent className='px-2 pb-2 flex flex-col items-start gap-2'>
               <ScrollArea className='w-full h-64'>
-                <table className='w-full'>
-                  <tbody>
-                    {data.map(it => (
-                      <tr key={it.id} className='not-first:border-t first:[&_button]:hidden'>
-                        <td>
-                          Version {it.version}
-                        </td>
-                        <td>
-                          <div className='w-full flex flex-col px-2 py-1 gap-2'>
-                            <span>
-                              <Pilcrow size={12} className='inline' /> {it.text}
-                            </span>
-                            <span>
-                              <Hash size={12} className='inline' /> {it.tags.map(name => (
-                                <span key={name} className='px-2 py-1 rounded-md bg-accent border mr-1'>
-                                  {name}
-                                </span>
-                              ))}
-                              {it.tags.length === 0 && (
-                                <span className='italic text-accent-foreground'>(No tags)</span>
-                              )}
-                            </span>
-                            <span>
-                              <ShieldAlert size={12} className='inline' /> Rated as {it.rating}
-                            </span>
-                            <span className='text-secondary-foreground text-sm'>
-                              Created at {new Date(it.createdAt).toLocaleDateString()} by {it.userIdentifier.username}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td>
-                          <Button
-                            variant='outline'
-                            disabled={!user}
-                            onClick={() => {
-                              revertHandle.openWithPayload({
-                                ...it,
-                                id
-                              });
-                            }}>
-                            <Undo2 /> Revert To
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ul className='w-full min-w-0'>
+                  {data.map(it => (
+                    <li key={it.id} className='grid grid-cols-[max-content_minmax(0,1fr)] items-center not-first:border-t'>
+                      <span className='whitespace-nowrap'>
+                        Version {it.version}
+                      </span>
+                      <div className='min-w-0 flex flex-col px-2 py-1 gap-2 [overflow-wrap:anywhere]'>
+                        <table className='w-full table-fixed border-collapse'>
+                          <colgroup>
+                            <col className='w-5' />
+                            <col />
+                          </colgroup>
+                          <tbody>
+                            <tr>
+                              <td className='pt-2 align-top'>
+                                <Pilcrow size={12} />
+                              </td>
+                              <td className='py-1 align-top'>
+                                {it.text ? <>Text: {it.text}</> : <span className='italic'>(no text)</span>}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className='pt-2 align-top'>
+                                <Hash size={12} />
+                              </td>
+                              <td className='py-1 align-top'>
+                                <div className='flex flex-wrap items-center gap-1'>
+                                  {it.tags.map(name => (
+                                    <span key={name} className='min-w-0 max-w-full px-2 py-1 rounded-md bg-accent border'>
+                                      {name}
+                                    </span>
+                                  ))}
+                                  {it.tags.length === 0 && (
+                                    <span className='italic text-accent-foreground'>(No tags)</span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className='pt-2 align-top'>
+                                <ShieldAlert size={12} />
+                              </td>
+                              <td className='py-1 align-top'>
+                                Rated as {it.rating}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <span className='text-secondary-foreground text-sm'>
+                          Created at {new Date(it.createdAt).toLocaleDateString()} by {it.userIdentifier.username}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </ScrollArea>
             </CollapsibleContent>
           </Collapsible>
@@ -472,11 +393,10 @@ export default function ImagePage() {
   return (
     <div className='w-full grid grid-cols-12 gap-4'>
       <EditDialog handle={editHandle} />
-      <RevertDialog handle={revertHandle} />
       <div className='col-span-12 md:col-span-4'>
         <Image id={Number(id)} />
       </div>
-      <div className='col-span-12 md:col-span-8'>
+      <div className='col-span-12 min-w-0 md:col-span-8'>
         <Info id={Number(id)} />
         <Versions id={Number(id)} />
       </div>
