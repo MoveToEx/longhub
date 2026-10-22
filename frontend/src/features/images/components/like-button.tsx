@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAppDispatch } from "@/shared/hooks/use-redux";
 import { openEditShortcutDialog } from "@/features/images/state/edit-shortcut-dialog-slice";
 import { formatError } from "@/shared/lib/utils";
+import { useState } from "react";
 
 export default function LikeButton({
   id,
@@ -17,6 +18,8 @@ export default function LikeButton({
   const dispatch = useAppDispatch();
   const { data: user } = useAuth();
   const { data, isLoading, mutate } = useImageFavoriteState(id);
+  const [isFavoriting, setIsFavoriting] = useState(false);
+  const loading = isLoading || isFavoriting;
 
   return (
     <Button
@@ -26,6 +29,7 @@ export default function LikeButton({
           return;
         }
 
+        setIsFavoriting(true);
         try {
           await api.post('/favorite', {
             imageId: id
@@ -41,11 +45,15 @@ export default function LikeButton({
         catch (e) {
           toast.error(formatError(e));
         }
+        finally {
+          setIsFavoriting(false);
+        }
       }}
       variant='outline'
-      disabled={isLoading || !user}>
-      {isLoading && <Spinner />}
-      {!isLoading && <Heart fill={data ? '#f84a63' : '#ffffff'} />}
+      aria-busy={loading}
+      disabled={loading || !user}>
+      {loading && <Spinner />}
+      {!loading && <Heart fill={data ? '#f84a63' : '#ffffff'} />}
       {data && <span>Customize</span>}
       {!!data || <span>Like</span>}
     </Button>
