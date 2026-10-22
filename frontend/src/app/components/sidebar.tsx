@@ -1,5 +1,5 @@
 import { Bookmark, ChevronUp, CircleUserRound, ExternalLink, FileText, Home, LogIn, LogOut, Search, Settings, SquareMousePointer, User2 } from "lucide-react";
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/shared/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/shared/components/ui/sidebar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/shared/components/ui/dropdown-menu";
 import useAuth from "@/features/auth/hooks/use-auth";
 import { Spinner } from "@/shared/components/ui/spinner";
@@ -38,14 +38,25 @@ const items = [
 
 const loginHandle = BaseDialog.createHandle<void>();
 
+function useCloseMobileSidebar() {
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  return () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+}
+
 function AccountMenu() {
   const { data, error, isLoading, reset, mutate } = useAuth();
   const navigate = useNavigate();
+  const closeMobileSidebar = useCloseMobileSidebar();
 
   if (isLoading) {
     return (
       <>
-        <LoginDialog handle={loginHandle} />
+        <LoginDialog handle={loginHandle} onLoginSuccess={closeMobileSidebar} />
         <BaseDialog.Trigger handle={loginHandle} disabled render={
           <SidebarMenuButton className='h-10'>
             <Spinner /> Loading
@@ -58,7 +69,7 @@ function AccountMenu() {
   if (error || !data) {
     return (
       <>
-        <LoginDialog handle={loginHandle} />
+        <LoginDialog handle={loginHandle} onLoginSuccess={closeMobileSidebar} />
         <BaseDialog.Trigger handle={loginHandle} render={
           <SidebarMenuButton className='h-10'>
             <LogIn /> Login
@@ -70,7 +81,7 @@ function AccountMenu() {
 
   return (
     <>
-      <LoginDialog handle={loginHandle} />
+      <LoginDialog handle={loginHandle} onLoginSuccess={closeMobileSidebar} />
       <DropdownMenu>
         <DropdownMenuTrigger render={
           <SidebarMenuButton className='h-10'>
@@ -80,12 +91,14 @@ function AccountMenu() {
         } />
         <DropdownMenuContent side='top' className="w-[--radix-popper-anchor-width]">
           <DropdownMenuItem className='cursor-pointer' onClick={() => {
-            navigate('/user/' + data.id)
+            navigate('/user/' + data.id);
+            closeMobileSidebar();
           }}>
             <CircleUserRound /> Profile
           </DropdownMenuItem>
           <DropdownMenuItem className='cursor-pointer' onClick={() => {
-            navigate('/user/settings')
+            navigate('/user/settings');
+            closeMobileSidebar();
           }}>
             <Settings /> Settings
           </DropdownMenuItem>
@@ -109,6 +122,7 @@ function SidebarItem({ url, title, Icon }: {
   Icon: FC
 }) {
   const { pathname } = useLocation();
+  const closeMobileSidebar = useCloseMobileSidebar();
   const isExternal = /^https?:\/\//.test(url);
   const isActive = !isExternal && (pathname === url || url !== '/' && pathname.startsWith(`${url}/`));
 
@@ -118,13 +132,13 @@ function SidebarItem({ url, title, Icon }: {
         isActive={isActive}
         render={
           isExternal ? (
-            <a href={url} target='_blank' rel='noreferrer'>
+            <a href={url} target='_blank' rel='noreferrer' onClick={closeMobileSidebar}>
               <Icon />
               <span>{title}</span>
               <ExternalLink className='text-muted-foreground max-w-3 max-h-3' />
             </a>
           ) : (
-            <Link to={url}>
+            <Link to={url} onClick={closeMobileSidebar}>
               <Icon />
               <span>{title}</span>
             </Link>

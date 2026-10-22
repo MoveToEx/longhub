@@ -17,7 +17,7 @@ import { Button } from "@/shared/components/ui/button";
 import api from "@/shared/lib/axios";
 import { toast } from "sonner";
 import { useLocalStorage } from "usehooks-ts";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import RegisterDialog from "@/features/auth/components/register-dialog";
 import { base64ToArray, formatError } from "@/shared/lib/utils";
 import type { Wrapped } from "@/shared/lib/types";
@@ -36,12 +36,12 @@ type LoginResponse = {
 }
 
 type FormProps = {
-  handle: BaseDialog.Handle<void>,
+  onSuccess: () => void,
   onMethodChange: (val: LoginMethod) => void,
 }
 
 function PasswordLogin({
-  handle,
+  onSuccess,
   onMethodChange,
 }: FormProps) {
   const [, setSession] = useLocalStorage('nmsl-session', '');
@@ -64,7 +64,7 @@ function PasswordLogin({
         setSession(response.data.data.token);
         toast.success('Successfully logged in');
         mutate('self');
-        handle.close();
+        onSuccess();
       }
     }
     catch (e) {
@@ -159,7 +159,7 @@ type WebAuthnNewResponse = {
 }
 
 function WebAuthnLogin({
-  handle,
+  onSuccess,
   onMethodChange,
 }: FormProps) {
   const [, setSession] = useLocalStorage('nmsl-session', '');
@@ -189,7 +189,7 @@ function WebAuthnLogin({
       setSession(result.data.data.token);
       await mutate('self');
       toast.success('Successfully logged in');
-      handle.close();
+      onSuccess();
     }
     catch (e) {
       toast.error(formatError(e))
@@ -218,14 +218,29 @@ function WebAuthnLogin({
 }
 
 export default function LoginDialog({
-  handle
+  handle,
+  onLoginSuccess,
 }: {
-  handle: BaseDialog.Handle<void>
+  handle: BaseDialog.Handle<void>,
+  onLoginSuccess?: () => void,
 }) {
   const [method, setMethod] = useState<LoginMethod>('password');
+  const loginSucceeded = useRef(false);
+
+  const finishLogin = () => {
+    loginSucceeded.current = true;
+    handle.close();
+  };
 
   return (
-    <Dialog handle={handle} onOpenChangeComplete={() => setMethod('password')}>
+    <Dialog handle={handle} onOpenChangeComplete={open => {
+      setMethod('password');
+      if (!open && loginSucceeded.current) {
+        loginSucceeded.current = false;
+        // Let the login drawer finish closing before dismissing a parent drawer.
+        onLoginSuccess?.();
+      }
+    }}>
       <ResponsiveDialogContent>
         <DialogHeader>
           <DialogTitle>
@@ -236,8 +251,8 @@ export default function LoginDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {method === 'password' && <PasswordLogin handle={handle} onMethodChange={val => setMethod(val)} />}
-        {method === 'webauthn' && <WebAuthnLogin handle={handle} onMethodChange={val => setMethod(val)} />}
+        {method === 'password' && <PasswordLogin onSuccess={finishLogin} onMethodChange={val => setMethod(val)} />}
+        {method === 'webauthn' && <WebAuthnLogin onSuccess={finishLogin} onMethodChange={val => setMethod(val)} />}
       </ResponsiveDialogContent>
     </Dialog>
   )
