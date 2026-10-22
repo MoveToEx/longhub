@@ -341,8 +341,10 @@ function Versions({ id }: { id: number }) {
                               </td>
                             </tr>
                             <tr>
-                              <td className='pt-2 align-top'>
-                                <Hash size={12} />
+                              <td className='py-1 align-top'>
+                                <div className={`flex h-lh items-center ${it.tags.length > 0 ? 'box-content border-y border-transparent py-1' : ''}`}>
+                                  <Hash size={12} />
+                                </div>
                               </td>
                               <td className='py-1 align-top'>
                                 <div className='flex flex-wrap items-center gap-1'>
