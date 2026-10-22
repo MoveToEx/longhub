@@ -246,10 +246,10 @@ function Info({ id }: { id: number }) {
               Image #{data.id}
             </div>
             <div>
-              <Pilcrow size={12} className='inline' /> {data.text ? <>Text: {data.text}</> : <span className='italic'>(no text)</span>}
+              <Pilcrow size={12} className='inline' /> {data.text || <span className='italic'>(no text)</span>}
             </div>
             <div>
-              <Hash size={12} className='inline' /> Tags: <Tags value={data.tags.map(it => it.name)} />
+              <Hash size={12} className='inline' /> <Tags value={data.tags.map(it => it.name)} />
             </div>
             <div>
               <ShieldAlert size={12} className='inline' /> Rated as {data.rating}
@@ -332,7 +332,7 @@ function Versions({ id }: { id: number }) {
                                 <Pilcrow size={12} />
                               </td>
                               <td className='py-1 align-top'>
-                                {it.text ? <>Text: {it.text}</> : <span className='italic'>(no text)</span>}
+                                {it.text || <span className='italic'>(no text)</span>}
                               </td>
                             </tr>
                             <tr>
