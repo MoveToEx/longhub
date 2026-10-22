@@ -18,7 +18,7 @@ export default function UserPage() {
       <div className='h-6'>
         <UserHeader id={Number(id)} />
       </div>
-      <div className='h-32 flex flex-col md:flex-row gap-4'>
+      <div className='flex flex-col md:h-32 md:flex-row gap-4'>
         <div className='md:flex-2'>
           <ContributionGrid userId={Number(id)} />
         </div>
