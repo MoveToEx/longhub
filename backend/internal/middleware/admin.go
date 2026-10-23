@@ -22,6 +22,14 @@ func RequireAdmin() gin.HandlerFunc {
 }
 
 func requireAdmin(queries adminQueries) gin.HandlerFunc {
+	return requirePermission(queries, db.PermissionAdmin, "Admin permission required")
+}
+
+func RequireDeletionPermission() gin.HandlerFunc {
+	return requirePermission(db.Query(), db.PermissionRequestDeletion, "Request deletion permission required")
+}
+
+func requirePermission(queries adminQueries, required int64, message string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		id := c.GetInt64("UserID")
@@ -44,8 +52,8 @@ func requireAdmin(queries adminQueries) gin.HandlerFunc {
 		if c.GetString("AuthorizedVia") == "AppKey" {
 			permission &= c.GetInt64("Permission")
 		}
-		if permission&db.PermissionAdmin == 0 {
-			utils.ErrorResponse(c, http.StatusForbidden, "Admin permission required")
+		if permission&required != required {
+			utils.ErrorResponse(c, http.StatusForbidden, "%s", message)
 			c.Abort()
 			return
 		}

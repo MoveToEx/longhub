@@ -12,8 +12,10 @@ import { useState } from "react";
 
 export default function LikeButton({
   id,
+  deleted = false,
 }: {
   id: number,
+  deleted?: boolean,
 }) {
   const dispatch = useAppDispatch();
   const { data: user } = useAuth();
@@ -51,7 +53,7 @@ export default function LikeButton({
       }}
       variant='outline'
       aria-busy={loading}
-      disabled={loading || !user}>
+      disabled={loading || !user || (deleted && !data)}>
       {loading && <Spinner />}
       {!loading && <Heart fill={data ? '#f84a63' : '#ffffff'} />}
       {data && <span>Customize</span>}

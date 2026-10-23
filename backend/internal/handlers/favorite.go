@@ -141,14 +141,18 @@ func AddFavorite(c *gin.Context) {
 		}
 	}
 
-	err := db.Query().AddFavorite(ctx, sqlc.AddFavoriteParams{
+	affected, err := db.Query().AddFavorite(ctx, sqlc.AddFavoriteParams{
 		UserID:   userID,
-		ImageID:  payload.ImageID,
+		ID:       payload.ImageID,
 		Shortcut: shortcut,
 	})
 
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when inserting row")
+		return
+	}
+	if affected == 0 {
+		utils.ErrorResponse(c, 404, "Image not found or deleted")
 		return
 	}
 

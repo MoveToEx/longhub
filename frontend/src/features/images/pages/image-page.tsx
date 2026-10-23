@@ -26,6 +26,7 @@ import type { Rating } from "@/shared/lib/types";
 import _ from "lodash";
 import LikeButton from "../components/like-button";
 import ImageMetadata from "../components/image-metadata";
+import DeletionRequests from "../components/deletion-requests";
 import { copyImage, formatError } from "@/shared/lib/utils";
 
 
@@ -253,9 +254,12 @@ function Info({ id }: { id: number }) {
             <div>
               Created at {new Date(data.createdAt).toLocaleDateString()} by {data.userIdentifier.username}
             </div>
+            {data.deletion && <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+              Deleted {new Date(data.deletion.deletedAt).toLocaleString()}: {data.deletion.reason}
+            </p>}
           </CardContent>
           <CardFooter className='flex flex-row gap-4 flex-wrap'>
-            <Button variant='outline' onClick={() => {
+            <Button variant='outline' disabled={Boolean(data.deletion)} onClick={() => {
               editHandle.openWithPayload({
                 ...data,
                 tags: data.tags.map(it => it.name)
@@ -264,7 +268,7 @@ function Info({ id }: { id: number }) {
               <Edit /> Edit
             </Button>
 
-            <LikeButton id={data.id} />
+            <LikeButton id={data.id} deleted={Boolean(data.deletion)} />
 
             <Button
               variant='outline'
@@ -334,6 +338,11 @@ function Versions({ id }: { id: number }) {
   )
 }
 
+function DeletionPanel({ id }: { id: number }) {
+  const { data } = useImage(id);
+  return <DeletionRequests key={id} id={id} deleted={!data || Boolean(data.deletion)} />;
+}
+
 export default function ImagePage() {
   const { id } = useParams();
 
@@ -350,6 +359,7 @@ export default function ImagePage() {
       <div className='col-span-12 min-w-0 md:col-span-8'>
         <Info id={Number(id)} />
         <Versions id={Number(id)} />
+        <DeletionPanel id={Number(id)} />
       </div>
     </div>
   )

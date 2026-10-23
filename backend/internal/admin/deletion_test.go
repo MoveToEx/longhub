@@ -1,0 +1,68 @@
+package admin
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"github.com/gin-gonic/gin"
+	"long/internal/deletion"
+	"long/internal/sqlc"
+	"long/internal/testutil"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestDeletionGraphQLIntegration(t *testing.T) {
+	pool, transact := testutil.Database(t)
+	testutil.Seed(t, pool)
+	q := sqlc.New(pool)
+	service := &deletion.Service{Transact: transact}
+	ctx := context.Background()
+	id, err := service.Create(ctx, 1, 2, "duplicate original")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoke := func(query string, vars any) string {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{"query": query, "variables": vars})
+		r := gin.New()
+		r.POST("/admin/graphql", func(c *gin.Context) { c.Set("UserID", int64(1)) }, NewHandler(q, service))
+		req := httptest.NewRequest("POST", "/admin/graphql", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != 200 && rec.Code != 422 {
+			t.Fatal(rec.Code, rec.Body.String())
+		}
+		return rec.Body.String()
+	}
+	list := `query($input: DeletionQueryInput){deletionRequests(input:$input){total items{id imageId reason status createdAt processedAt moderator{id username} requester{id username} imageDeletedAt activeDeletionId}}}`
+	got := invoke(list, nil)
+	if !strings.Contains(got, `"total":1`) || !strings.Contains(got, `"status":"ACTIVE"`) || !strings.Contains(got, `"id":"1"`) {
+		t.Fatal(got)
+	}
+	mutation := `mutation($id:ID!,$action:DeletionAction!,$expectedStatus:DeletionStatus!){moderateDeletionRequest(id:$id,action:$action,expectedStatus:$expectedStatus){id status moderator{id username} imageDeletedAt activeDeletionId}}`
+	vars := map[string]any{"id": id, "action": "ACCEPT", "expectedStatus": "ACTIVE"}
+	got = invoke(mutation, vars)
+	if strings.Contains(got, `"errors"`) || !strings.Contains(got, `"status":"APPROVED"`) || !strings.Contains(got, `"username":"admin"`) {
+		t.Fatal(got)
+	}
+	got = invoke(mutation, vars)
+	if !strings.Contains(got, `"code":"CONFLICT"`) {
+		t.Fatal(got)
+	}
+	got = invoke(list, nil)
+	if !strings.Contains(got, `"total":0`) {
+		t.Fatal(got)
+	}
+	got = invoke(list, map[string]any{"input": map[string]any{"status": "ALL", "search": "duplicate", "limit": 1}})
+	if !strings.Contains(got, `"total":1`) || !strings.Contains(got, `"status":"APPROVED"`) {
+		t.Fatal(got)
+	}
+	for _, query := range []string{`{deletionRequests{items{requester{email}}}}`, `{deletionRequests{items{moderator{passwordHash}}}}`, `{deletionRequests(input:{limit:101}){total}}`} {
+		if got := invoke(query, nil); !strings.Contains(got, `"errors"`) {
+			t.Fatal(got)
+		}
+	}
+}

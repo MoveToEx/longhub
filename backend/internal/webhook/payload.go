@@ -28,14 +28,15 @@ type ValueChange struct {
 type Changes map[string]ValueChange
 
 type Data struct {
-	ImageID   int64       `json:"imageID"`
-	Text      string      `json:"text"`
-	Rating    sqlc.Rating `json:"rating"`
-	Tags      []string    `json:"tags"`
-	ImageURL  string      `json:"imageURL"`
-	CreatedAt time.Time   `json:"createdAt"`
-	Changes   *Changes    `json:"changes,omitempty"`
-	Uploader  *User       `json:"uploader,omitempty"`
+	DeletionEventID string      `json:"deletionEventId,omitempty"`
+	ImageID         int64       `json:"imageID"`
+	Text            string      `json:"text"`
+	Rating          sqlc.Rating `json:"rating"`
+	Tags            []string    `json:"tags"`
+	ImageURL        string      `json:"imageURL"`
+	CreatedAt       time.Time   `json:"createdAt"`
+	Changes         *Changes    `json:"changes,omitempty"`
+	Uploader        *User       `json:"uploader,omitempty"`
 }
 
 type Payload struct {

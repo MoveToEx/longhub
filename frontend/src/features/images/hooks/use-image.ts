@@ -4,7 +4,8 @@ import useTaggedSWR from "@/shared/lib/swr";
 
 type ImageResponse = Image & Pick<Version, 'text' | 'rating' | 'version'> & {
   userIdentifier: UserIdentifier,
-  tags: Tag[]
+  tags: Tag[],
+  deletion: { reason: string; deletedAt: string } | null
 }
 
 export default function useImage(id: number) {

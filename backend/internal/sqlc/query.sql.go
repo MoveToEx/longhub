@@ -12,20 +12,26 @@ import (
 	"long/internal/types"
 )
 
-const addFavorite = `-- name: AddFavorite :exec
+const addFavorite = `-- name: AddFavorite :execrows
+WITH active_image AS (
+  SELECT id FROM image WHERE id = $2 AND deleted_at IS NULL FOR SHARE
+)
 INSERT INTO user_favorite(user_id, image_id, shortcut)
-VALUES ($1, $2, $3)
+SELECT $1, id, $3 FROM active_image
 `
 
 type AddFavoriteParams struct {
 	UserID   int64       `json:"userId"`
-	ImageID  int64       `json:"imageId"`
+	ID       int64       `json:"id"`
 	Shortcut pgtype.Text `json:"shortcut"`
 }
 
-func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error {
-	_, err := q.db.Exec(ctx, addFavorite, arg.UserID, arg.ImageID, arg.Shortcut)
-	return err
+func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addFavorite, arg.UserID, arg.ID, arg.Shortcut)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const adminCountImages = `-- name: AdminCountImages :one
@@ -313,8 +319,9 @@ func (q *Queries) CompleteUploadSession(ctx context.Context, arg CompleteUploadS
 
 const countFavoriteImages = `-- name: CountFavoriteImages :one
 SELECT COUNT(*)
-FROM user_favorite
-WHERE user_id = $1
+FROM user_favorite f JOIN image i ON i.id = f.image_id
+JOIN version v ON v.id = i.current_version_id
+WHERE f.user_id = $1 AND i.deleted_at IS NULL
 `
 
 func (q *Queries) CountFavoriteImages(ctx context.Context, userID int64) (int64, error) {
@@ -325,8 +332,9 @@ func (q *Queries) CountFavoriteImages(ctx context.Context, userID int64) (int64,
 }
 
 const countImages = `-- name: CountImages :one
-SELECT COUNT(*) FROM public.image
-WHERE deleted_at IS NULL
+SELECT COUNT(*) FROM public.image i
+JOIN version v ON v.id = i.current_version_id
+WHERE i.deleted_at IS NULL
 `
 
 func (q *Queries) CountImages(ctx context.Context) (int64, error) {
@@ -337,8 +345,9 @@ func (q *Queries) CountImages(ctx context.Context) (int64, error) {
 }
 
 const countImagesByUser = `-- name: CountImagesByUser :one
-SELECT COUNT(*) FROM image
-WHERE "user_id" = $1 AND "deleted_at" IS NULL
+SELECT COUNT(*) FROM image i
+JOIN version v ON v.id = i.current_version_id
+WHERE i.user_id = $1 AND i.deleted_at IS NULL
 `
 
 func (q *Queries) CountImagesByUser(ctx context.Context, userID int64) (int64, error) {
@@ -736,9 +745,9 @@ func (q *Queries) GetCredentials(ctx context.Context, userID int64) ([]WebauthnP
 }
 
 const getFavoriteByShortcut = `-- name: GetFavoriteByShortcut :many
-SELECT user_id, image_id, shortcut, favorited_at FROM user_favorite
-WHERE shortcut LIKE $2 || '%'
-  AND user_id = $1
+SELECT f.user_id, f.image_id, f.shortcut, f.favorited_at FROM user_favorite f JOIN image i ON i.id = f.image_id
+WHERE f.shortcut LIKE $2 || '%'
+  AND f.user_id = $1 AND i.deleted_at IS NULL
 `
 
 type GetFavoriteByShortcutParams struct {
@@ -783,7 +792,7 @@ WITH current_version AS (
 SELECT fav.shortcut, fav.favorited_at, fav.user_id, i.id, i.image_key, i.image_url, cv.text, cv.rating, cv.version FROM user_favorite fav
 JOIN image i ON fav.image_id = i.id
 JOIN current_version cv ON i.current_version_id = cv.version_id
-WHERE fav.user_id = $3
+WHERE fav.user_id = $3 AND i.deleted_at IS NULL
 ORDER BY fav.favorited_at DESC, i.id
 OFFSET $1
 LIMIT $2
@@ -872,6 +881,7 @@ WITH current_version AS (
 favorite_versions AS (
   SELECT cv.version_id
   FROM user_favorite f
+  JOIN image i ON i.id = f.image_id AND i.deleted_at IS NULL
   JOIN current_version cv
     ON cv.image_id = f.image_id
   WHERE f.user_id = $1
@@ -1284,7 +1294,7 @@ FROM current_version cv
 JOIN image i ON cv.image_id = i.id
 JOIN version_tag vt ON vt.version_id = cv.version_id
 JOIN tag t ON t.id = vt.tag_id
-WHERE t.name = $1
+WHERE t.name = $1 AND i.deleted_at IS NULL
 ORDER BY RANDOM()
 LIMIT $2
 `
@@ -1420,10 +1430,12 @@ func (q *Queries) GetTagsWithPrefix(ctx context.Context, arg GetTagsWithPrefixPa
 }
 
 const getUnindexedImages = `-- name: GetUnindexedImages :many
-SELECT im.id AS image_id, v.id AS version_id
+SELECT im.id AS image_id,
+       CASE WHEN im.deleted_at IS NOT NULL THEN 0 ELSE v.id END::BIGINT AS version_id
 FROM image im
-JOIN version v ON v.id = im.current_version_id
-WHERE im.indexed_version IS NULL OR im.indexed_version != v.id
+LEFT JOIN version v ON v.id = im.current_version_id
+WHERE (im.deleted_at IS NOT NULL AND im.indexed_version IS DISTINCT FROM 0)
+   OR (im.deleted_at IS NULL AND v.id IS NOT NULL AND im.indexed_version IS DISTINCT FROM v.id)
 ORDER BY im.id
 LIMIT 100
 `
@@ -2033,7 +2045,7 @@ FROM image i
 JOIN current_version cv ON cv.image_id = i.id
 JOIN user_favorite fav ON fav.image_id = i.id
 JOIN UNNEST($1::TEXT[]) AS q(term) ON fav.shortcut ILIKE q.term || '%'
-WHERE fav.user_id = $2
+WHERE fav.user_id = $2 AND i.deleted_at IS NULL
 GROUP BY i.id, i.image_url, cv.text, cv.rating
 ORDER BY relevance DESC, i.id
 LIMIT 12

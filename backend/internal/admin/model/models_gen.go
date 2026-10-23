@@ -44,6 +44,33 @@ type AdminVersion struct {
 	Tags    []string    `json:"tags"`
 }
 
+type DeletionQueryInput struct {
+	Offset    int                  `json:"offset"`
+	Limit     int                  `json:"limit"`
+	Search    string               `json:"search"`
+	Status    DeletionStatusFilter `json:"status"`
+	SortBy    DeletionSort         `json:"sortBy"`
+	Direction SortDirection        `json:"direction"`
+}
+
+type DeletionRequest struct {
+	ID               string         `json:"id"`
+	ImageID          string         `json:"imageId"`
+	Reason           string         `json:"reason"`
+	Status           DeletionStatus `json:"status"`
+	Requester        *AdminUploader `json:"requester"`
+	Moderator        *AdminUploader `json:"moderator,omitempty"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	ProcessedAt      *time.Time     `json:"processedAt,omitempty"`
+	ImageDeletedAt   *time.Time     `json:"imageDeletedAt,omitempty"`
+	ActiveDeletionID *string        `json:"activeDeletionId,omitempty"`
+}
+
+type DeletionRequestPage struct {
+	Items []*DeletionRequest `json:"items"`
+	Total int64              `json:"total"`
+}
+
 type ImagePage struct {
 	Items []*AdminImage `json:"items"`
 	Total int64         `json:"total"`
@@ -56,6 +83,9 @@ type ImageQueryInput struct {
 	Status    ImageStatus   `json:"status"`
 	SortBy    ImageSort     `json:"sortBy"`
 	Direction SortDirection `json:"direction"`
+}
+
+type Mutation struct {
 }
 
 type Query struct {
@@ -72,6 +102,242 @@ type UserQueryInput struct {
 	Search    string        `json:"search"`
 	SortBy    UserSort      `json:"sortBy"`
 	Direction SortDirection `json:"direction"`
+}
+
+type DeletionAction string
+
+const (
+	DeletionActionAccept DeletionAction = "ACCEPT"
+	DeletionActionReject DeletionAction = "REJECT"
+	DeletionActionReopen DeletionAction = "REOPEN"
+	DeletionActionRevoke DeletionAction = "REVOKE"
+)
+
+var AllDeletionAction = []DeletionAction{
+	DeletionActionAccept,
+	DeletionActionReject,
+	DeletionActionReopen,
+	DeletionActionRevoke,
+}
+
+func (e DeletionAction) IsValid() bool {
+	switch e {
+	case DeletionActionAccept, DeletionActionReject, DeletionActionReopen, DeletionActionRevoke:
+		return true
+	}
+	return false
+}
+
+func (e DeletionAction) String() string {
+	return string(e)
+}
+
+func (e *DeletionAction) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeletionAction(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeletionAction", str)
+	}
+	return nil
+}
+
+func (e DeletionAction) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeletionAction) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeletionAction) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type DeletionSort string
+
+const (
+	DeletionSortID          DeletionSort = "ID"
+	DeletionSortCreatedAt   DeletionSort = "CREATED_AT"
+	DeletionSortProcessedAt DeletionSort = "PROCESSED_AT"
+)
+
+var AllDeletionSort = []DeletionSort{
+	DeletionSortID,
+	DeletionSortCreatedAt,
+	DeletionSortProcessedAt,
+}
+
+func (e DeletionSort) IsValid() bool {
+	switch e {
+	case DeletionSortID, DeletionSortCreatedAt, DeletionSortProcessedAt:
+		return true
+	}
+	return false
+}
+
+func (e DeletionSort) String() string {
+	return string(e)
+}
+
+func (e *DeletionSort) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeletionSort(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeletionSort", str)
+	}
+	return nil
+}
+
+func (e DeletionSort) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeletionSort) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeletionSort) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type DeletionStatus string
+
+const (
+	DeletionStatusActive   DeletionStatus = "ACTIVE"
+	DeletionStatusApproved DeletionStatus = "APPROVED"
+	DeletionStatusRejected DeletionStatus = "REJECTED"
+	DeletionStatusRevoked  DeletionStatus = "REVOKED"
+)
+
+var AllDeletionStatus = []DeletionStatus{
+	DeletionStatusActive,
+	DeletionStatusApproved,
+	DeletionStatusRejected,
+	DeletionStatusRevoked,
+}
+
+func (e DeletionStatus) IsValid() bool {
+	switch e {
+	case DeletionStatusActive, DeletionStatusApproved, DeletionStatusRejected, DeletionStatusRevoked:
+		return true
+	}
+	return false
+}
+
+func (e DeletionStatus) String() string {
+	return string(e)
+}
+
+func (e *DeletionStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeletionStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeletionStatus", str)
+	}
+	return nil
+}
+
+func (e DeletionStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeletionStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeletionStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type DeletionStatusFilter string
+
+const (
+	DeletionStatusFilterActive   DeletionStatusFilter = "ACTIVE"
+	DeletionStatusFilterApproved DeletionStatusFilter = "APPROVED"
+	DeletionStatusFilterRejected DeletionStatusFilter = "REJECTED"
+	DeletionStatusFilterRevoked  DeletionStatusFilter = "REVOKED"
+	DeletionStatusFilterAll      DeletionStatusFilter = "ALL"
+)
+
+var AllDeletionStatusFilter = []DeletionStatusFilter{
+	DeletionStatusFilterActive,
+	DeletionStatusFilterApproved,
+	DeletionStatusFilterRejected,
+	DeletionStatusFilterRevoked,
+	DeletionStatusFilterAll,
+}
+
+func (e DeletionStatusFilter) IsValid() bool {
+	switch e {
+	case DeletionStatusFilterActive, DeletionStatusFilterApproved, DeletionStatusFilterRejected, DeletionStatusFilterRevoked, DeletionStatusFilterAll:
+		return true
+	}
+	return false
+}
+
+func (e DeletionStatusFilter) String() string {
+	return string(e)
+}
+
+func (e *DeletionStatusFilter) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeletionStatusFilter(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeletionStatusFilter", str)
+	}
+	return nil
+}
+
+func (e DeletionStatusFilter) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeletionStatusFilter) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeletionStatusFilter) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type ImageRating string

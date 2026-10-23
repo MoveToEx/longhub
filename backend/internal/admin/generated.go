@@ -29,6 +29,7 @@ func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
+	Mutation() MutationResolver
 	Query() QueryResolver
 }
 
@@ -70,14 +71,37 @@ type ComplexityRoot struct {
 		Version func(childComplexity int) int
 	}
 
+	DeletionRequest struct {
+		ActiveDeletionID func(childComplexity int) int
+		CreatedAt        func(childComplexity int) int
+		ID               func(childComplexity int) int
+		ImageDeletedAt   func(childComplexity int) int
+		ImageID          func(childComplexity int) int
+		Moderator        func(childComplexity int) int
+		ProcessedAt      func(childComplexity int) int
+		Reason           func(childComplexity int) int
+		Requester        func(childComplexity int) int
+		Status           func(childComplexity int) int
+	}
+
+	DeletionRequestPage struct {
+		Items func(childComplexity int) int
+		Total func(childComplexity int) int
+	}
+
 	ImagePage struct {
 		Items func(childComplexity int) int
 		Total func(childComplexity int) int
 	}
 
+	Mutation struct {
+		ModerateDeletionRequest func(childComplexity int, id string, action model.DeletionAction, expectedStatus model.DeletionStatus) int
+	}
+
 	Query struct {
-		Images func(childComplexity int, input *model.ImageQueryInput) int
-		Users  func(childComplexity int, input *model.UserQueryInput) int
+		DeletionRequests func(childComplexity int, input *model.DeletionQueryInput) int
+		Images           func(childComplexity int, input *model.ImageQueryInput) int
+		Users            func(childComplexity int, input *model.UserQueryInput) int
 	}
 
 	UserPage struct {
@@ -90,9 +114,13 @@ type ComplexityRoot struct {
 
 // region    ************************** generated!.gotpl **************************
 
+type MutationResolver interface {
+	ModerateDeletionRequest(ctx context.Context, id string, action model.DeletionAction, expectedStatus model.DeletionStatus) (*model.DeletionRequest, error)
+}
 type QueryResolver interface {
 	Images(ctx context.Context, input *model.ImageQueryInput) (*model.ImagePage, error)
 	Users(ctx context.Context, input *model.UserQueryInput) (*model.UserPage, error)
+	DeletionRequests(ctx context.Context, input *model.DeletionQueryInput) (*model.DeletionRequestPage, error)
 }
 
 // endregion ************************** generated!.gotpl **************************
@@ -249,6 +277,80 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.AdminVersion.Version(childComplexity), true
 
+	case "DeletionRequest.activeDeletionId":
+		if e.ComplexityRoot.DeletionRequest.ActiveDeletionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.ActiveDeletionID(childComplexity), true
+	case "DeletionRequest.createdAt":
+		if e.ComplexityRoot.DeletionRequest.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.CreatedAt(childComplexity), true
+	case "DeletionRequest.id":
+		if e.ComplexityRoot.DeletionRequest.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.ID(childComplexity), true
+	case "DeletionRequest.imageDeletedAt":
+		if e.ComplexityRoot.DeletionRequest.ImageDeletedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.ImageDeletedAt(childComplexity), true
+	case "DeletionRequest.imageId":
+		if e.ComplexityRoot.DeletionRequest.ImageID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.ImageID(childComplexity), true
+	case "DeletionRequest.moderator":
+		if e.ComplexityRoot.DeletionRequest.Moderator == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.Moderator(childComplexity), true
+	case "DeletionRequest.processedAt":
+		if e.ComplexityRoot.DeletionRequest.ProcessedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.ProcessedAt(childComplexity), true
+	case "DeletionRequest.reason":
+		if e.ComplexityRoot.DeletionRequest.Reason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.Reason(childComplexity), true
+	case "DeletionRequest.requester":
+		if e.ComplexityRoot.DeletionRequest.Requester == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.Requester(childComplexity), true
+	case "DeletionRequest.status":
+		if e.ComplexityRoot.DeletionRequest.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequest.Status(childComplexity), true
+
+	case "DeletionRequestPage.items":
+		if e.ComplexityRoot.DeletionRequestPage.Items == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequestPage.Items(childComplexity), true
+	case "DeletionRequestPage.total":
+		if e.ComplexityRoot.DeletionRequestPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletionRequestPage.Total(childComplexity), true
+
 	case "ImagePage.items":
 		if e.ComplexityRoot.ImagePage.Items == nil {
 			break
@@ -262,6 +364,29 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ImagePage.Total(childComplexity), true
 
+	case "Mutation.moderateDeletionRequest":
+		if e.ComplexityRoot.Mutation.ModerateDeletionRequest == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_moderateDeletionRequest_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ModerateDeletionRequest(childComplexity, args["id"].(string), args["action"].(model.DeletionAction), args["expectedStatus"].(model.DeletionStatus)), true
+
+	case "Query.deletionRequests":
+		if e.ComplexityRoot.Query.DeletionRequests == nil {
+			break
+		}
+
+		args, err := ec.field_Query_deletionRequests_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.DeletionRequests(childComplexity, args["input"].(*model.DeletionQueryInput)), true
 	case "Query.images":
 		if e.ComplexityRoot.Query.Images == nil {
 			break
@@ -308,6 +433,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalers := func() *graphql.InputUnmarshalerIndex {
 		return graphql.NewInputUnmarshalerIndex(
+			graphql.NewInputUnmarshaler("DeletionQueryInput", ec.unmarshalInputDeletionQueryInput),
 			graphql.NewInputUnmarshaler("ImageQueryInput", ec.unmarshalInputImageQueryInput),
 			graphql.NewInputUnmarshaler("UserQueryInput", ec.unmarshalInputUserQueryInput),
 		)
@@ -344,6 +470,21 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			}
 
 			return &response
+		}
+	case ast.Mutation:
+		return func(ctx context.Context) *graphql.Response {
+			if !first {
+				return nil
+			}
+			first = false
+			ctx = graphql.WithLazyInputUnmarshalerIndex(ctx, inputUnmarshalers)
+			data := ec._Mutation(ctx, opCtx.Operation.SelectionSet)
+			var buf bytes.Buffer
+			data.MarshalGQL(&buf)
+
+			return &graphql.Response{
+				Data: buf.Bytes(),
+			}
 		}
 
 	default:
@@ -456,6 +597,42 @@ func (ec *executionContext) childFields_AdminVersion(ctx context.Context, field 
 		return ec.fieldContext_AdminVersion_tags(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type AdminVersion", field.Name)
+}
+
+func (ec *executionContext) childFields_DeletionRequest(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_DeletionRequest_id(ctx, field)
+	case "imageId":
+		return ec.fieldContext_DeletionRequest_imageId(ctx, field)
+	case "reason":
+		return ec.fieldContext_DeletionRequest_reason(ctx, field)
+	case "status":
+		return ec.fieldContext_DeletionRequest_status(ctx, field)
+	case "requester":
+		return ec.fieldContext_DeletionRequest_requester(ctx, field)
+	case "moderator":
+		return ec.fieldContext_DeletionRequest_moderator(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_DeletionRequest_createdAt(ctx, field)
+	case "processedAt":
+		return ec.fieldContext_DeletionRequest_processedAt(ctx, field)
+	case "imageDeletedAt":
+		return ec.fieldContext_DeletionRequest_imageDeletedAt(ctx, field)
+	case "activeDeletionId":
+		return ec.fieldContext_DeletionRequest_activeDeletionId(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type DeletionRequest", field.Name)
+}
+
+func (ec *executionContext) childFields_DeletionRequestPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "items":
+		return ec.fieldContext_DeletionRequestPage_items(ctx, field)
+	case "total":
+		return ec.fieldContext_DeletionRequestPage_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type DeletionRequestPage", field.Name)
 }
 
 func (ec *executionContext) childFields_ImagePage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -594,6 +771,36 @@ func (ec *executionContext) childFields___Type(ctx context.Context, field graphq
 
 // region    ***************************** args.gotpl *****************************
 
+func (ec *executionContext) field_Mutation_moderateDeletionRequest_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "action",
+		func(ctx context.Context, v any) (model.DeletionAction, error) {
+			return ec.unmarshalNDeletionAction2longᚋinternalᚋadminᚋmodelᚐDeletionAction(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["action"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedStatus",
+		func(ctx context.Context, v any) (model.DeletionStatus, error) {
+			return ec.unmarshalNDeletionStatus2longᚋinternalᚋadminᚋmodelᚐDeletionStatus(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedStatus"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -605,6 +812,20 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_deletionRequests_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (*model.DeletionQueryInput, error) {
+			return ec.unmarshalODeletionQueryInput2ᚖlongᚋinternalᚋadminᚋmodelᚐDeletionQueryInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -1234,6 +1455,309 @@ func (ec *executionContext) fieldContext_AdminVersion_tags(_ context.Context, fi
 	return graphql.NewScalarFieldContext("AdminVersion", field, false, false, "String")
 }
 
+func (ec *executionContext) _DeletionRequest_id(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequest", field, false, false, "ID")
+}
+
+func (ec *executionContext) _DeletionRequest_imageId(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_imageId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_imageId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequest", field, false, false, "ID")
+}
+
+func (ec *executionContext) _DeletionRequest_reason(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_reason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequest", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeletionRequest_status(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v model.DeletionStatus) graphql.Marshaler {
+			return ec.marshalNDeletionStatus2longᚋinternalᚋadminᚋmodelᚐDeletionStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequest", field, false, false, "DeletionStatus")
+}
+
+func (ec *executionContext) _DeletionRequest_requester(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_requester(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Requester, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AdminUploader) graphql.Marshaler {
+			return ec.marshalNAdminUploader2ᚖlongᚋinternalᚋadminᚋmodelᚐAdminUploader(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_requester(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeletionRequest",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminUploader(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeletionRequest_moderator(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_moderator(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Moderator, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AdminUploader) graphql.Marshaler {
+			return ec.marshalOAdminUploader2ᚖlongᚋinternalᚋadminᚋmodelᚐAdminUploader(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_moderator(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeletionRequest",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AdminUploader(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeletionRequest_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNDateTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequest", field, false, false, "DateTime")
+}
+
+func (ec *executionContext) _DeletionRequest_processedAt(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_processedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProcessedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalODateTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_processedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequest", field, false, false, "DateTime")
+}
+
+func (ec *executionContext) _DeletionRequest_imageDeletedAt(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_imageDeletedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ImageDeletedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalODateTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_imageDeletedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequest", field, false, false, "DateTime")
+}
+
+func (ec *executionContext) _DeletionRequest_activeDeletionId(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequest) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequest_activeDeletionId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActiveDeletionID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequest_activeDeletionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequest", field, false, false, "ID")
+}
+
+func (ec *executionContext) _DeletionRequestPage_items(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequestPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequestPage_items(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Items, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.DeletionRequest) graphql.Marshaler {
+			return ec.marshalNDeletionRequest2ᚕᚖlongᚋinternalᚋadminᚋmodelᚐDeletionRequestᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequestPage_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeletionRequestPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DeletionRequest(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeletionRequestPage_total(ctx context.Context, field graphql.CollectedField, obj *model.DeletionRequestPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletionRequestPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletionRequestPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletionRequestPage", field, false, false, "Int64")
+}
+
 func (ec *executionContext) _ImagePage_items(ctx context.Context, field graphql.CollectedField, obj *model.ImagePage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1287,6 +1811,50 @@ func (ec *executionContext) _ImagePage_total(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_ImagePage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ImagePage", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _Mutation_moderateDeletionRequest(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_moderateDeletionRequest(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ModerateDeletionRequest(ctx, fc.Args["id"].(string), fc.Args["action"].(model.DeletionAction), fc.Args["expectedStatus"].(model.DeletionStatus))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.DeletionRequest) graphql.Marshaler {
+			return ec.marshalNDeletionRequest2ᚖlongᚋinternalᚋadminᚋmodelᚐDeletionRequest(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_moderateDeletionRequest(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DeletionRequest(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_moderateDeletionRequest_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Query_images(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -1371,6 +1939,50 @@ func (ec *executionContext) fieldContext_Query_users(ctx context.Context, field 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_users_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_deletionRequests(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_deletionRequests(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().DeletionRequests(ctx, fc.Args["input"].(*model.DeletionQueryInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.DeletionRequestPage) graphql.Marshaler {
+			return ec.marshalNDeletionRequestPage2ᚖlongᚋinternalᚋadminᚋmodelᚐDeletionRequestPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_deletionRequests(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DeletionRequestPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_deletionRequests_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -2581,6 +3193,102 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputDeletionQueryInput(ctx context.Context, obj any) (model.DeletionQueryInput, error) {
+	var it model.DeletionQueryInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["offset"]; !present {
+		asMap["offset"] = 0
+	}
+	if _, present := asMap["limit"]; !present {
+		asMap["limit"] = 25
+	}
+	if _, present := asMap["search"]; !present {
+		asMap["search"] = ""
+	}
+	if _, present := asMap["status"]; !present {
+		asMap["status"] = "ACTIVE"
+	}
+	if _, present := asMap["sortBy"]; !present {
+		asMap["sortBy"] = "CREATED_AT"
+	}
+	if _, present := asMap["direction"]; !present {
+		asMap["direction"] = "DESC"
+	}
+
+	fieldsInOrder := [...]string{"offset", "limit", "search", "status", "sortBy", "direction"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "offset":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Offset = data
+		case "limit":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Limit = data
+		case "search":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("search"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Search = data
+		case "status":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("status"))
+			data, err := ec.unmarshalNDeletionStatusFilter2longᚋinternalᚋadminᚋmodelᚐDeletionStatusFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Status = data
+		case "sortBy":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sortBy"))
+			data, err := ec.unmarshalNDeletionSort2longᚋinternalᚋadminᚋmodelᚐDeletionSort(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SortBy = data
+		case "direction":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+			data, err := ec.unmarshalNSortDirection2longᚋinternalᚋadminᚋmodelᚐSortDirection(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Direction = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalDeletionQueryInput unmarshals raw into the DeletionQueryInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalDeletionQueryInput(ctx context.Context, raw any) (model.DeletionQueryInput, error) {
+	var out model.DeletionQueryInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "DeletionQueryInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputImageQueryInput(ctx context.Context, obj any) (model.ImageQueryInput, error) {
 	var it model.ImageQueryInput
 	if obj == nil {
@@ -2993,6 +3701,122 @@ func (ec *executionContext) _AdminVersion(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var deletionRequestImplementors = []string{"DeletionRequest"}
+
+func (ec *executionContext) _DeletionRequest(ctx context.Context, sel ast.SelectionSet, obj *model.DeletionRequest) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, deletionRequestImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DeletionRequest")
+		case "id":
+			out.Values[i] = ec._DeletionRequest_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "imageId":
+			out.Values[i] = ec._DeletionRequest_imageId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reason":
+			out.Values[i] = ec._DeletionRequest_reason(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._DeletionRequest_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requester":
+			out.Values[i] = ec._DeletionRequest_requester(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moderator":
+			out.Values[i] = ec._DeletionRequest_moderator(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._DeletionRequest_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "processedAt":
+			out.Values[i] = ec._DeletionRequest_processedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "imageDeletedAt":
+			out.Values[i] = ec._DeletionRequest_imageDeletedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "activeDeletionId":
+			out.Values[i] = ec._DeletionRequest_activeDeletionId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var deletionRequestPageImplementors = []string{"DeletionRequestPage"}
+
+func (ec *executionContext) _DeletionRequestPage(ctx context.Context, sel ast.SelectionSet, obj *model.DeletionRequestPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, deletionRequestPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DeletionRequestPage")
+		case "items":
+			out.Values[i] = ec._DeletionRequestPage_items(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._DeletionRequestPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var imagePageImplementors = []string{"ImagePage"}
 
 func (ec *executionContext) _ImagePage(ctx context.Context, sel ast.SelectionSet, obj *model.ImagePage) graphql.Marshaler {
@@ -3011,6 +3835,49 @@ func (ec *executionContext) _ImagePage(ctx context.Context, sel ast.SelectionSet
 			}
 		case "total":
 			out.Values[i] = ec._ImagePage_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var mutationImplementors = []string{"Mutation"}
+
+func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, mutationImplementors)
+	ctx = graphql.WithFieldContext(ctx, &graphql.FieldContext{
+		Object: "Mutation",
+	})
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		innerCtx := graphql.WithRootFieldContext(ctx, &graphql.RootFieldContext{
+			Object: field.Name,
+			Field:  field,
+		})
+
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Mutation")
+		case "moderateDeletionRequest":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_moderateDeletionRequest(ctx, field)
+			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -3061,6 +3928,12 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Query_users(ctx, field)
+				})
+		case "deletionRequests":
+			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Query_deletionRequests(ctx, field)
 				})
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
@@ -3577,6 +4450,78 @@ func (ec *executionContext) marshalNDateTime2timeᚐTime(ctx context.Context, se
 	return res
 }
 
+func (ec *executionContext) unmarshalNDeletionAction2longᚋinternalᚋadminᚋmodelᚐDeletionAction(ctx context.Context, v any) (model.DeletionAction, error) {
+	var res model.DeletionAction
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNDeletionAction2longᚋinternalᚋadminᚋmodelᚐDeletionAction(ctx context.Context, sel ast.SelectionSet, v model.DeletionAction) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNDeletionRequest2ᚕᚖlongᚋinternalᚋadminᚋmodelᚐDeletionRequestᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.DeletionRequest) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNDeletionRequest2ᚖlongᚋinternalᚋadminᚋmodelᚐDeletionRequest(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNDeletionRequest2ᚖlongᚋinternalᚋadminᚋmodelᚐDeletionRequest(ctx context.Context, sel ast.SelectionSet, v *model.DeletionRequest) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "DeletionRequest!")
+		return graphql.Null
+	}
+	return ec._DeletionRequest(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNDeletionRequestPage2ᚖlongᚋinternalᚋadminᚋmodelᚐDeletionRequestPage(ctx context.Context, sel ast.SelectionSet, v *model.DeletionRequestPage) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "DeletionRequestPage!")
+		return graphql.Null
+	}
+	return ec._DeletionRequestPage(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNDeletionSort2longᚋinternalᚋadminᚋmodelᚐDeletionSort(ctx context.Context, v any) (model.DeletionSort, error) {
+	var res model.DeletionSort
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNDeletionSort2longᚋinternalᚋadminᚋmodelᚐDeletionSort(ctx context.Context, sel ast.SelectionSet, v model.DeletionSort) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNDeletionStatus2longᚋinternalᚋadminᚋmodelᚐDeletionStatus(ctx context.Context, v any) (model.DeletionStatus, error) {
+	var res model.DeletionStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNDeletionStatus2longᚋinternalᚋadminᚋmodelᚐDeletionStatus(ctx context.Context, sel ast.SelectionSet, v model.DeletionStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNDeletionStatusFilter2longᚋinternalᚋadminᚋmodelᚐDeletionStatusFilter(ctx context.Context, v any) (model.DeletionStatusFilter, error) {
+	var res model.DeletionStatusFilter
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNDeletionStatusFilter2longᚋinternalᚋadminᚋmodelᚐDeletionStatusFilter(ctx context.Context, sel ast.SelectionSet, v model.DeletionStatusFilter) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalID(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -3870,6 +4815,13 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
+func (ec *executionContext) marshalOAdminUploader2ᚖlongᚋinternalᚋadminᚋmodelᚐAdminUploader(ctx context.Context, sel ast.SelectionSet, v *model.AdminUploader) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AdminUploader(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalOAdminVersion2ᚖlongᚋinternalᚋadminᚋmodelᚐAdminVersion(ctx context.Context, sel ast.SelectionSet, v *model.AdminVersion) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -3922,6 +4874,32 @@ func (ec *executionContext) marshalODateTime2ᚖtimeᚐTime(ctx context.Context,
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalTime(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalODeletionQueryInput2ᚖlongᚋinternalᚋadminᚋmodelᚐDeletionQueryInput(ctx context.Context, v any) (*model.DeletionQueryInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputDeletionQueryInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalID(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOID2ᚖstring(ctx context.Context, sel ast.SelectionSet, v *string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalID(*v)
 	return res
 }
 

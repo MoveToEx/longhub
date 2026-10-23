@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"long/internal/admin/model"
+	"long/internal/deletion"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,8 +22,21 @@ import (
 
 const maxRequestBytes = 1 << 20
 
-func NewHandler(store Store) gin.HandlerFunc {
-	config := Config{Resolvers: &Resolver{Store: store}}
+type actorContextKey struct{}
+
+func NewHandler(store Store, services ...*deletion.Service) gin.HandlerFunc {
+	resolver := &Resolver{Store: store}
+	if len(services) > 0 {
+		resolver.Deletions = services[0]
+	}
+	config := Config{Resolvers: resolver}
+	config.Complexity.Query.DeletionRequests = func(child int, input *model.DeletionQueryInput) int {
+		limit := 25
+		if input != nil {
+			limit = input.Limit
+		}
+		return listComplexity(child, limit)
+	}
 	config.Complexity.Query.Images = func(child int, input *model.ImageQueryInput) int {
 		limit := 25
 		if input != nil {
@@ -55,6 +69,7 @@ func NewHandler(store Store) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes)
+		ctx = context.WithValue(ctx, actorContextKey{}, c.GetInt64("UserID"))
 		server.ServeHTTP(c.Writer, c.Request.WithContext(ctx))
 	}
 }

@@ -15,6 +15,7 @@ const (
 	TypeIndexReconcile = "ms-index-reconcile"
 	TypeDispatch       = "webhook-dispatch"
 	TypeInvoke         = "webhook-invoke"
+	TypeDeletionOutbox = "deletion-outbox"
 )
 
 var (
@@ -44,6 +45,7 @@ func Init() error {
 	mux.HandleFunc(TypeDispatch, HandleDispatchTask)
 	mux.HandleFunc(TypeInvoke, HandleInvokeTask)
 	mux.HandleFunc(TypeIndexReconcile, HandleIndexReconcileTask)
+	mux.HandleFunc(TypeDeletionOutbox, HandleDeletionOutboxTask)
 
 	if err := server.Start(mux); err != nil {
 		_ = client.Close()
@@ -56,6 +58,14 @@ func Init() error {
 	}
 
 	if err := scheduler.Start(); err != nil {
+		shutdown()
+		return err
+	}
+	if _, err := scheduler.Register("@every 10s", NewDeletionOutboxTask()); err != nil {
+		shutdown()
+		return err
+	}
+	if err := WakeDeletionOutbox(context.Background()); err != nil {
 		shutdown()
 		return err
 	}

@@ -12,6 +12,11 @@ import (
 	"strconv"
 )
 
+// ModerateDeletionRequest is the resolver for the moderateDeletionRequest field.
+func (r *mutationResolver) ModerateDeletionRequest(ctx context.Context, id string, action model.DeletionAction, expectedStatus model.DeletionStatus) (*model.DeletionRequest, error) {
+	return r.moderateDeletion(ctx, id, action, expectedStatus)
+}
+
 // Images is the resolver for the images field.
 func (r *queryResolver) Images(ctx context.Context, input *model.ImageQueryInput) (*model.ImagePage, error) {
 	if input == nil {
@@ -92,7 +97,18 @@ func (r *queryResolver) Users(ctx context.Context, input *model.UserQueryInput) 
 	return result, nil
 }
 
+// DeletionRequests is the resolver for the deletionRequests field.
+func (r *queryResolver) DeletionRequests(ctx context.Context, input *model.DeletionQueryInput) (*model.DeletionRequestPage, error) {
+	return r.listDeletionRequests(ctx, input)
+}
+
+// Mutation returns MutationResolver implementation.
+func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
+
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
-type queryResolver struct{ *Resolver }
+type (
+	mutationResolver struct{ *Resolver }
+	queryResolver    struct{ *Resolver }
+)

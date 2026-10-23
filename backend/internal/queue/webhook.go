@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -58,6 +59,7 @@ type InvocationBody struct {
 }
 
 type InvokeArgs struct {
+	EventID   string               `json:"eventId,omitempty"`
 	WebhookID int64                `json:"webhookId"`
 	ImageID   int64                `json:"imageId"`
 	Version   int32                `json:"version"`
@@ -158,12 +160,17 @@ func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32,
 	return nil
 }
 
-func NewInvokeTask(id, imageID int64, version int32, eventType int64, body RequestBody, initiator *webhookpayload.User) (*asynq.Task, error) {
+func NewInvokeTask(id, imageID int64, version int32, eventType int64, body RequestBody, initiator *webhookpayload.User, eventIDs ...string) (*asynq.Task, error) {
+	var eventID string
+	if len(eventIDs) > 0 {
+		eventID = eventIDs[0]
+	}
 	payloadBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	payload, err := json.Marshal(InvokeArgs{
+		EventID:   eventID,
 		WebhookID: id,
 		ImageID:   imageID,
 		Version:   version,
@@ -199,6 +206,9 @@ func HandleDispatchTask(ctx context.Context, task *asynq.Task) error {
 		VersionID: args.VersionID,
 	})
 
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -262,12 +272,17 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 		return err
 	}
 
-	image, err := db.Query().GetImage(ctx, args.ImageID)
-	if err != nil {
-		return err
-	}
-	if shouldIgnoreInvocation(image.Version, args.Version) {
-		return nil
+	if args.EventType != db.WebhookDeletionEvent {
+		image, err := db.Query().GetImage(ctx, args.ImageID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if shouldIgnoreInvocation(image.Version, args.Version) {
+			return nil
+		}
 	}
 	bodyBytes, err := decodeInvokeBody(args.Body)
 	if err != nil {

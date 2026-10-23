@@ -12,6 +12,7 @@ import (
 	"mime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -33,7 +34,13 @@ type Tag struct {
 
 type GetImageResponse struct {
 	sqlc.GetImageRow
-	Tags []Tag `json:"tags"`
+	Tags     []Tag              `json:"tags"`
+	Deletion *ImageDeletionInfo `json:"deletion"`
+}
+
+type ImageDeletionInfo struct {
+	Reason    string    `json:"reason"`
+	DeletedAt time.Time `json:"deletedAt"`
 }
 
 func GetImage(c *gin.Context) {
@@ -45,7 +52,7 @@ func GetImage(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	img, err := db.Query().GetImage(ctx, id)
+	img, err := db.Query().GetImageDetails(ctx, id)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -72,9 +79,16 @@ func GetImage(c *gin.Context) {
 		})
 	}
 
+	var deletionInfo *ImageDeletionInfo
+	if img.DeletedAt.Valid {
+		deletionInfo = &ImageDeletionInfo{Reason: img.DeletionReason, DeletedAt: img.DeletedAt.Time}
+	}
+	c.Header("Cache-Control", "no-store")
 	utils.SuccessResponse(c, GetImageResponse{
-		GetImageRow: img,
-		Tags:        tag,
+		GetImageRow: sqlc.GetImageRow{ID: img.ID, Text: img.Text, Rating: sqlc.Rating(img.Rating), ImageUrl: img.ImageUrl,
+			ImageKey: img.ImageKey, CreatedAt: img.CreatedAt, UserIdentifier: img.UserIdentifier, CurrentVersionID: img.CurrentVersionID, Version: img.Version},
+		Tags:     tag,
+		Deletion: deletionInfo,
 	})
 }
 
@@ -439,6 +453,13 @@ func UpdateImage(c *gin.Context) {
 
 	var versionID int64
 	err = db.Transaction(ctx, func(tx *sqlc.Queries) error {
+		image, err := tx.LockImageForDeletion(ctx, imageID)
+		if err != nil {
+			return err
+		}
+		if image.DeletedAt.Valid {
+			return pgx.ErrNoRows
+		}
 		if len(tags) != 0 {
 			if err := tx.CreateTags(ctx, tags); err != nil {
 				return err
@@ -456,6 +477,10 @@ func UpdateImage(c *gin.Context) {
 	})
 
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			utils.ErrorResponse(c, 404, "Image not found or deleted")
+			return
+		}
 		utils.ErrorResponse(c, 500, "Failed when creating new version")
 		return
 	}

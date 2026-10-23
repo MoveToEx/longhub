@@ -1,11 +1,11 @@
-import { useEffect, useRef } from 'react';
-import { Link, NavLink, Outlet } from 'react-router';
-import { useSWRConfig } from 'swr';
-import { Images, Shield, Users } from 'lucide-react';
-import useAuth from '@/features/auth/hooks/use-auth';
-import { hasAdminPermission } from '@/shared/lib/const';
-import { Spinner } from '@/shared/components/ui/spinner';
-import { cn } from '@/shared/lib/utils';
+import { useEffect, useRef } from "react";
+import { Link, NavLink, Outlet } from "react-router";
+import { useSWRConfig } from "swr";
+import { Images, Shield, Users, ClipboardList } from "lucide-react";
+import useAuth from "@/features/auth/hooks/use-auth";
+import { hasAdminPermission } from "@/shared/lib/const";
+import { Spinner } from "@/shared/components/ui/spinner";
+import { cn } from "@/shared/lib/utils";
 
 export default function AdminLayout() {
   const { data, session, isLoading } = useAuth();
@@ -18,7 +18,7 @@ export default function AdminLayout() {
     previousSession.current = session;
     if (previous && (previous !== session || !allowed)) {
       void mutate(
-        (key) => Array.isArray(key) && key[0] === 'admin' && key[1] === previous,
+        (key) => Array.isArray(key) && key[0] === "admin" && key[1] === previous,
         undefined,
         { revalidate: false },
       );
@@ -38,8 +38,8 @@ export default function AdminLayout() {
         <h1 className="text-xl font-semibold">Admin access required</h1>
         <p className="text-muted-foreground">
           {data
-            ? 'Your account does not have Admin permission.'
-            : 'Log in with an account that has Admin permission to open this panel.'}
+            ? "Your account does not have Admin permission."
+            : "Log in with an account that has Admin permission to open this panel."}
         </p>
         <Link to="/" className="inline-block underline underline-offset-4">
           Return home
@@ -50,20 +50,21 @@ export default function AdminLayout() {
   return (
     <div className="min-w-0 space-y-6">
       <header className="space-y-4">
-        <nav aria-label="Admin pages" className="flex gap-1 border-b">
+        <nav aria-label="Admin pages" className="flex gap-1 overflow-x-auto border-b">
           {[
-            { to: '/admin/images', label: 'Images', icon: Images },
-            { to: '/admin/users', label: 'Users', icon: Users },
+            { to: "/admin/images", label: "Images", icon: Images },
+            { to: "/admin/users", label: "Users", icon: Users },
+            { to: "/admin/deletions", label: "Deletion requests", icon: ClipboardList },
           ].map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2 border-b-2 px-4 py-3 text-sm',
+                  "flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm",
                   isActive
-                    ? 'border-primary font-medium text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                    ? "border-primary font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
                 )
               }
             >

@@ -10,6 +10,7 @@ import SearchPage from '@/features/search/pages/search-page'
 import AdminLayout from '@/features/admin/components/admin-layout'
 import AdminImagesPage from '@/features/admin/pages/admin-images-page'
 import AdminUsersPage from '@/features/admin/pages/admin-users-page'
+import AdminDeletionsPage from '@/features/admin/pages/admin-deletions-page'
 
 export const router = createBrowserRouter([
   {
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="/admin/images" replace /> },
           { path: 'images', Component: AdminImagesPage },
           { path: 'users', Component: AdminUsersPage },
+          { path: 'deletions', Component: AdminDeletionsPage },
         ],
       },
       {

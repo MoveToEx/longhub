@@ -1,5 +1,8 @@
-export type SortDirection = 'ASC' | 'DESC';
-export type ImageStatus = 'ACTIVE' | 'DELETED' | 'ALL';
+export type SortDirection = "ASC" | "DESC";
+export type ImageStatus = "ACTIVE" | "DELETED" | "ALL";
+export type DeletionStatus = "ACTIVE" | "APPROVED" | "REJECTED" | "REVOKED";
+export type DeletionAction = "ACCEPT" | "REJECT" | "REVOKE" | "REOPEN";
+export type AdminResource = "images" | "users" | "deletionRequests";
 
 export type AdminQueryInput = {
   offset: number;
@@ -7,7 +10,7 @@ export type AdminQueryInput = {
   search: string;
   sortBy: string;
   direction: SortDirection;
-  status?: ImageStatus;
+  status?: ImageStatus | DeletionStatus;
 };
 
 export type AdminPage<T> = { items: T[]; total: number };
@@ -24,7 +27,7 @@ export type AdminImage = {
     id: string;
     version: number;
     text: string;
-    rating: 'none' | 'moderate' | 'violent';
+    rating: "none" | "moderate" | "violent";
     tags: string[];
   } | null;
 };
@@ -55,4 +58,32 @@ export const USER_QUERY = `query AdminUsers($input: UserQueryInput) {
     total
     items { id username email permission createdAt activeImageCount versionCount }
   }
+}`;
+
+export type AdminDeletion = {
+  id: string;
+  imageId: string;
+  reason: string;
+  status: DeletionStatus;
+  requester: { id: string; username: string };
+  moderator: { id: string; username: string } | null;
+  createdAt: string;
+  processedAt: string | null;
+  imageDeletedAt: string | null;
+  activeDeletionId: string | null;
+};
+
+export const DELETION_QUERY = `query AdminDeletions($input: DeletionQueryInput) {
+  deletionRequests(input: $input) {
+    total
+    items {
+      id imageId reason status createdAt processedAt imageDeletedAt activeDeletionId
+      requester { id username }
+      moderator { id username }
+    }
+  }
+}`;
+
+export const MODERATE_DELETION = `mutation ModerateDeletion($id: ID!, $action: DeletionAction!, $expectedStatus: DeletionStatus!) {
+  moderateDeletionRequest(id: $id, action: $action, expectedStatus: $expectedStatus) { id status }
 }`;

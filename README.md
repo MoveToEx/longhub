@@ -71,7 +71,8 @@ $ ./long
 
 The **Admin** sidebar entry opens `/admin/images` and `/admin/users`. It is visible
 only to signed-in users with the existing Admin permission (`8`). Both pages are
-read-only and are also guarded when opened directly. Permissions use four bits:
+guarded when opened directly. Deletion requests have a separate moderation tab.
+Permissions use four bits:
 Create (`1`), Edit (`2`), Request deletion (`4`), and Admin (`8`). The Users table
 displays them in `ADEC` order, using `-` for missing bits (for example, `--EC`).
 
@@ -139,8 +140,70 @@ part of the admin schema.
 
 Responses use `Cache-Control: no-store`. The endpoint accepts JSON POST only,
 limits request bodies to 1 MiB and query complexity to 5000 (including list size),
-and gives database queries a 10-second deadline. No mutations, subscriptions, or
-playground are exposed.
+and gives database queries a 10-second deadline. The only mutation is deletion
+moderation; no subscriptions or playground are exposed.
+
+### Deletion requests
+
+Image pages show public, paginated request history in a collapsed panel. Creating
+a request requires the existing **D bit (4)** specifically; Admin alone does not
+qualify. An application key needs D on both the key and its owner. Permissions are
+read from the database for each request, so revocation takes effect immediately.
+Existing bit values and registration defaults are unchanged.
+
+`GET /image/:id/deletion?offset=0&limit=25` returns `{data:{items,total}}`, including
+reason, requester ID/username, status, creation time and processing time. The limit
+is 1–100. `POST /image/:id/deletion` accepts `{ "reason": "Duplicate of …" }` with
+Session or Key authentication. Reasons are trimmed and must contain 1–2,000 Unicode
+characters. Each user may have one Active request per image. Duplicate active
+requests and submissions for deleted images return HTTP 409; missing images
+return 404. Full history stays public after deletion.
+
+Admins moderate at `/admin/deletions` or through GraphQL:
+
+```graphql
+query ReviewDeletionRequests {
+  deletionRequests(input: { status: ACTIVE, limit: 25, sortBy: CREATED_AT, direction: DESC }) {
+    total
+    items {
+      id imageId reason status createdAt processedAt imageDeletedAt activeDeletionId
+      requester { id username }
+      moderator { id username }
+    }
+  }
+}
+
+mutation AcceptRequest {
+  moderateDeletionRequest(id: "123", action: ACCEPT, expectedStatus: ACTIVE) {
+    id status imageDeletedAt activeDeletionId
+  }
+}
+```
+
+Filters support `ACTIVE` (default), `APPROVED`, `REJECTED`, `REVOKED`, and `ALL`.
+Search matches exact request/image IDs, requester names, or reasons. Sorting
+supports `ID`, `CREATED_AT`, and `PROCESSED_AT`; pagination uses the existing limits.
+Active requests support Accept/Reject; Approved supports Revoke; Rejected and
+Revoked support Reopen/Accept. Send the status last seen as `expectedStatus`.
+Stale or invalid transitions return a GraphQL error with `extensions.code: CONFLICT`.
+Only one request may control deletion at a time. Reopening clears moderator and
+processing time; all decisions record the acting moderator.
+
+Approval hides an image from discovery, user lists, favorites, recommendations,
+and search. Direct details and version/request history remain available, including
+the original image and deletion reason/date. Metadata edits and new favorites are
+blocked while deleted. Revocation restores visibility and retained favorites.
+Files, metadata, and existing favorite records are preserved.
+
+The deletion migration adds moderator attribution, uniqueness/index constraints,
+and a transactional outbox. Search changes and deletion webhook jobs are dispatched
+after commit, with a periodic retry every 10 seconds. Search workers serialize with
+moderation and use current database state; database filtering hides deleted hits
+immediately, while index totals converge after synchronization. Each approval
+captures an immutable image snapshot and the approving admin as initiator. Its
+`data.deletionEventId` identifies the approval, including reapproval after revocation.
+Webhook delivery retains the existing retry/failure handling. Restoration emits no
+webhook. Request editing, withdrawal, and hard deletion are not supported.
 
 ### Development and verification
 

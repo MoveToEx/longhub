@@ -6,6 +6,36 @@ enum ImageStatus { ACTIVE DELETED ALL }
 enum ImageSort { ID CREATED_AT UPDATED_AT }
 enum UserSort { ID USERNAME EMAIL CREATED_AT PERMISSION }
 enum ImageRating { none moderate violent }
+enum DeletionStatus { ACTIVE APPROVED REJECTED REVOKED }
+enum DeletionStatusFilter { ACTIVE APPROVED REJECTED REVOKED ALL }
+enum DeletionAction { ACCEPT REJECT REOPEN REVOKE }
+enum DeletionSort { ID CREATED_AT PROCESSED_AT }
+
+input DeletionQueryInput {
+  offset: Int! = 0
+  limit: Int! = 25
+  search: String! = ""
+  status: DeletionStatusFilter! = ACTIVE
+  sortBy: DeletionSort! = CREATED_AT
+  direction: SortDirection! = DESC
+}
+
+type DeletionRequest {
+  id: ID!
+  imageId: ID!
+  reason: String!
+  status: DeletionStatus!
+  requester: AdminUploader!
+  moderator: AdminUploader
+  createdAt: DateTime!
+  processedAt: DateTime
+  imageDeletedAt: DateTime
+  activeDeletionId: ID
+}
+type DeletionRequestPage { items: [DeletionRequest!]!, total: Int64! }
+type Mutation {
+  moderateDeletionRequest(id: ID!, action: DeletionAction!, expectedStatus: DeletionStatus!): DeletionRequest!
+}
 
 input ImageQueryInput {
   offset: Int! = 0
@@ -56,4 +86,5 @@ type UserPage { items: [AdminUser!]!, total: Int64! }
 type Query {
   images(input: ImageQueryInput): ImagePage!
   users(input: UserQueryInput): UserPage!
+  deletionRequests(input: DeletionQueryInput): DeletionRequestPage!
 }

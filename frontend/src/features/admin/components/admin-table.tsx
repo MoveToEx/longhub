@@ -1,25 +1,25 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, RefreshCw, Search } from 'lucide-react';
-import { Button } from '@/shared/components/ui/button';
-import { Input } from '@/shared/components/ui/input';
-import { Pagination } from '@/shared/components/ui/pagination';
-import { Spinner } from '@/shared/components/ui/spinner';
+import { useEffect, useState, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, RefreshCw, Search } from "lucide-react";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Pagination } from "@/shared/components/ui/pagination";
+import { Spinner } from "@/shared/components/ui/spinner";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from '@/shared/components/ui/dropdown-menu';
+} from "@/shared/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/shared/components/ui/select';
-import { useDebouncedState } from '@/shared/hooks/use-debounced-state';
-import useAdminQuery from '../hooks/use-admin-query';
-import type { AdminQueryInput, ImageStatus, SortDirection } from '../lib/types';
+} from "@/shared/components/ui/select";
+import { useDebouncedState } from "@/shared/hooks/use-debounced-state";
+import useAdminQuery from "../hooks/use-admin-query";
+import type { AdminQueryInput, AdminResource, SortDirection } from "../lib/types";
 
 export type AdminColumn<T> = {
   id: string;
@@ -30,7 +30,7 @@ export type AdminColumn<T> = {
 };
 
 type Props<T> = {
-  resource: 'images' | 'users';
+  resource: AdminResource;
   title: string;
   searchPlaceholder: string;
   query: string;
@@ -44,12 +44,23 @@ export default function AdminTable<T extends { id: string }>({
   query,
   columns,
 }: Props<T>) {
-  const search = useDebouncedState('', 300);
+  const label = title.toLowerCase();
+  const search = useDebouncedState("", 300);
   const [offset, setOffset] = useState(0);
   const [limit, setLimit] = useState(25);
-  const [sortBy, setSortBy] = useState('CREATED_AT');
-  const [direction, setDirection] = useState<SortDirection>('DESC');
-  const [status, setStatus] = useState<ImageStatus>('ACTIVE');
+  const [sortBy, setSortBy] = useState("CREATED_AT");
+  const [direction, setDirection] = useState<SortDirection>("DESC");
+  const [status, setStatus] = useState<NonNullable<AdminQueryInput["status"]>>("ACTIVE");
+  const statuses: Record<string, string> =
+    resource === "images"
+      ? { ACTIVE: "Active", DELETED: "Deleted", ALL: "All images" }
+      : {
+          ACTIVE: "Active",
+          APPROVED: "Approved",
+          REJECTED: "Rejected",
+          REVOKED: "Revoked",
+          ALL: "All requests",
+        };
   const [visible, setVisible] = useState(() =>
     columns.filter((column) => !column.hidden).map((column) => column.id),
   );
@@ -59,7 +70,7 @@ export default function AdminTable<T extends { id: string }>({
     sortBy,
     direction,
     search: search.debouncedState,
-    ...(resource === 'images' ? { status } : {}),
+    ...(resource !== "users" ? { status } : {}),
   };
   const { data, error, isValidating, mutate, unauthorized } = useAdminQuery<T>(
     resource,
@@ -85,7 +96,7 @@ export default function AdminTable<T extends { id: string }>({
             className="absolute left-3 top-2.5 size-4 text-muted-foreground"
           />
           <Input
-            aria-label={`Search ${resource}`}
+            aria-label={`Search ${title.toLowerCase()}`}
             className="pl-9"
             placeholder={searchPlaceholder}
             value={search.instantState}
@@ -96,7 +107,7 @@ export default function AdminTable<T extends { id: string }>({
             }}
           />
         </div>
-        {resource === 'images' && (
+        {resource !== "users" && (
           <Select
             value={status}
             onValueChange={(value) => {
@@ -106,19 +117,15 @@ export default function AdminTable<T extends { id: string }>({
               }
             }}
           >
-            <SelectTrigger aria-label="Image status">
-              <SelectValue>
-                {(value) =>
-                  ({ ACTIVE: 'Active', DELETED: 'Deleted', ALL: 'All images' })[
-                    value as ImageStatus
-                  ]
-                }
-              </SelectValue>
+            <SelectTrigger aria-label={resource === "images" ? "Image status" : "Request status"}>
+              <SelectValue>{(value) => statuses[String(value)]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="DELETED">Deleted</SelectItem>
-              <SelectItem value="ALL">All images</SelectItem>
+              {Object.entries(statuses).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
@@ -150,25 +157,25 @@ export default function AdminTable<T extends { id: string }>({
         </DropdownMenu>
         <Button
           variant="outline"
-          aria-label={`Refresh ${resource}`}
+          aria-label={`Refresh ${label}`}
           disabled={isValidating || search.isPending}
           onClick={() => void mutate()}
         >
-          <RefreshCw className={isValidating ? 'animate-spin' : ''} />
+          <RefreshCw className={isValidating ? "animate-spin" : ""} />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>
       {error ? (
         <div role="alert" className="space-y-3 rounded-xl border p-6">
           <p className="font-medium">
-            {unauthorized ? 'Admin access is no longer available.' : `Unable to load ${resource}.`}
+            {unauthorized ? "Admin access is no longer available." : `Unable to load ${label}.`}
           </p>
           <p className="text-sm text-muted-foreground">
             {unauthorized
-              ? 'Your session may have expired or your permissions may have changed.'
+              ? "Your session may have expired or your permissions may have changed."
               : error instanceof Error
                 ? error.message
-                : 'Please try again.'}
+                : "Please try again."}
           </p>
           {!unauthorized && (
             <Button variant="outline" onClick={() => void mutate()}>
@@ -193,9 +200,9 @@ export default function AdminTable<T extends { id: string }>({
                       className="whitespace-nowrap px-4 py-3 font-medium"
                       aria-sort={
                         column.sortBy === sortBy
-                          ? direction === 'ASC'
-                            ? 'ascending'
-                            : 'descending'
+                          ? direction === "ASC"
+                            ? "ascending"
+                            : "descending"
                           : undefined
                       }
                     >
@@ -204,7 +211,7 @@ export default function AdminTable<T extends { id: string }>({
                           className="flex items-center gap-2 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={() => {
                             setDirection(
-                              column.sortBy === sortBy && direction === 'DESC' ? 'ASC' : 'DESC',
+                              column.sortBy === sortBy && direction === "DESC" ? "ASC" : "DESC",
                             );
                             setSortBy(column.sortBy!);
                             setOffset(0);
@@ -212,7 +219,7 @@ export default function AdminTable<T extends { id: string }>({
                         >
                           {column.label}
                           {column.sortBy === sortBy ? (
-                            direction === 'ASC' ? (
+                            direction === "ASC" ? (
                               <ArrowUp className="size-3.5" />
                             ) : (
                               <ArrowDown className="size-3.5" />
@@ -233,7 +240,7 @@ export default function AdminTable<T extends { id: string }>({
                   <tr>
                     <td colSpan={shownColumns.length} className="px-4 py-14 text-center">
                       <span role="status" className="inline-flex items-center gap-2">
-                        <Spinner /> Loading {resource}…
+                        <Spinner /> Loading {label}…
                       </span>
                     </td>
                   </tr>
@@ -243,7 +250,7 @@ export default function AdminTable<T extends { id: string }>({
                       colSpan={shownColumns.length}
                       className="px-4 py-14 text-center text-muted-foreground"
                     >
-                      No {resource} match your filters.
+                      No {label} match your filters.
                     </td>
                   </tr>
                 ) : (
@@ -264,9 +271,9 @@ export default function AdminTable<T extends { id: string }>({
             <p className="text-sm text-muted-foreground" aria-live="polite">
               {data
                 ? total === 0
-                  ? '0 results'
+                  ? "0 results"
                   : `${offset + 1}–${Math.min(offset + limit, total)} of ${total.toLocaleString()}`
-                : 'Loading results…'}
+                : "Loading results…"}
             </p>
             <div className="flex items-center gap-2 text-sm">
               <span>Rows per page</span>

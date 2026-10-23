@@ -9,6 +9,7 @@ import (
 
 	"long/internal/config"
 	"long/internal/db"
+	"long/internal/deletion"
 	"long/internal/sqlc"
 
 	"github.com/hibiken/asynq"
@@ -79,11 +80,16 @@ func HandleIndexTask(ctx context.Context, task *asynq.Task) error {
 		return err
 	}
 
-	return db.Transaction(ctx, func(tx *sqlc.Queries) error {
-		version, err := tx.GetUnindexedVersion(ctx, sqlc.GetUnindexedVersionParams{
-			ImageID:   args.ImageID,
-			VersionID: args.VersionID,
-		})
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return syncImageIndex(ctx, args, db.Transaction, writeImageIndex)
+}
+
+// Hold the same image lock as moderation until Meili acknowledges the write.
+// Jobs always use current database state, including jobs queued before deletion.
+func syncImageIndex(ctx context.Context, args IndexArgs, transact deletion.Transaction, write func(context.Context, int64, *IndexPayloadItem) error) error {
+	return transact(ctx, func(tx *sqlc.Queries) error {
+		image, err := tx.LockImageForDeletion(ctx, args.ImageID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -91,42 +97,57 @@ func HandleIndexTask(ctx context.Context, task *asynq.Task) error {
 			return err
 		}
 
-		document := IndexPayloadItem{
-			ID:        version.ImageID,
-			Text:      version.Text,
-			Tags:      version.Tags,
-			Rating:    toInt(version.Rating),
-			UserID:    version.Image.UserID,
-			Uploader:  version.Uploader,
-			CreatedAt: version.Image.CreatedAt.Time.Unix(),
+		if image.DeletedAt.Valid || !image.CurrentVersionID.Valid {
+			if err := write(ctx, image.ID, nil); err != nil {
+				return err
+			}
+			return tx.CommitImageIndexRemoval(ctx, image.ID)
 		}
-
-		meili := config.MeiliSearch()
-		meiliTask, err := meili.Index("images").AddDocumentsWithContext(
-			ctx,
-			[]IndexPayloadItem{document},
-			&meilisearch.DocumentOptions{PrimaryKey: new("id")},
-		)
+		if args.VersionID != 0 && image.IndexedVersion.Valid && image.IndexedVersion.Int64 == image.CurrentVersionID.Int64 {
+			return nil
+		}
+		snapshot, err := tx.GetImageSnapshot(ctx, image.ID)
 		if err != nil {
 			return err
 		}
-
-		result, err := meili.WaitForTaskWithContext(ctx, meiliTask.TaskUID, 50*time.Millisecond)
-		if err != nil {
+		document := &IndexPayloadItem{
+			ID: image.ID, Text: snapshot.Text, Tags: snapshot.Tags,
+			Rating: toInt(sqlc.Rating(snapshot.Rating)), UserID: snapshot.UserID,
+			Uploader: snapshot.Username, CreatedAt: snapshot.CreatedAt.Time.Unix(),
+		}
+		if err := write(ctx, image.ID, document); err != nil {
 			return err
 		}
-		if result.Status != meilisearch.TaskStatusSucceeded {
-			return fmt.Errorf("indexing image %d finished with status %q: %s", args.ImageID, result.Status, result.Error.Message)
-		}
-
 		return tx.CommitUnindexedVersion(ctx, sqlc.CommitUnindexedVersionParams{
-			ImageID: args.ImageID,
+			ImageID: image.ID,
 			VersionID: pgtype.Int8{
-				Int64: args.VersionID,
+				Int64: image.CurrentVersionID.Int64,
 				Valid: true,
 			},
 		})
 	})
+}
+
+func writeImageIndex(ctx context.Context, imageID int64, document *IndexPayloadItem) error {
+	meili := config.MeiliSearch()
+	var task *meilisearch.TaskInfo
+	var err error
+	if document == nil {
+		task, err = meili.Index("images").DeleteDocumentWithContext(ctx, fmt.Sprint(imageID), nil)
+	} else {
+		task, err = meili.Index("images").AddDocumentsWithContext(ctx, []IndexPayloadItem{*document}, &meilisearch.DocumentOptions{PrimaryKey: new("id")})
+	}
+	if err != nil {
+		return err
+	}
+	result, err := meili.WaitForTaskWithContext(ctx, task.TaskUID, 50*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	if result.Status != meilisearch.TaskStatusSucceeded {
+		return fmt.Errorf("synchronizing image %d finished with status %q: %s", imageID, result.Status, result.Error.Message)
+	}
+	return nil
 }
 
 func HandleIndexReconcileTask(ctx context.Context, _ *asynq.Task) error {

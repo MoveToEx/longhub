@@ -1,13 +1,13 @@
-import { useEffect } from 'react';
-import { isAxiosError } from 'axios';
-import useSWR from 'swr';
-import useAuth from '@/features/auth/hooks/use-auth';
-import { hasAdminPermission } from '@/shared/lib/const';
-import { adminGraphQL } from '../lib/graphql';
-import type { AdminPage, AdminQueryInput } from '../lib/types';
+import { useEffect } from "react";
+import { isAxiosError } from "axios";
+import useSWR from "swr";
+import useAuth from "@/features/auth/hooks/use-auth";
+import { hasAdminPermission } from "@/shared/lib/const";
+import { adminGraphQL } from "../lib/graphql";
+import type { AdminPage, AdminQueryInput, AdminResource } from "../lib/types";
 
 export default function useAdminQuery<T>(
-  resource: 'images' | 'users',
+  resource: AdminResource,
   query: string,
   input: AdminQueryInput,
   enabled = true,
@@ -16,7 +16,7 @@ export default function useAdminQuery<T>(
   const allowed =
     Boolean(auth.session) && !auth.isLoading && hasAdminPermission(auth.data?.permission);
   const result = useSWR(
-    allowed && enabled ? ['admin', auth.session, resource, input] : null,
+    allowed && enabled ? ["admin", auth.session, resource, input] : null,
     async ([, session]) => {
       const data = await adminGraphQL<Record<string, AdminPage<T>>>(query, { input }, session);
       return data[resource];

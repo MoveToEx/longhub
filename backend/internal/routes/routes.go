@@ -3,6 +3,7 @@ package routes
 import (
 	"long/internal/admin"
 	"long/internal/db"
+	"long/internal/deletion"
 	"long/internal/handlers"
 	userHandlers "long/internal/handlers/user"
 	"long/internal/middleware"
@@ -11,7 +12,7 @@ import (
 )
 
 func RegisterRoutes(r *gin.Engine) {
-	r.POST("/admin/graphql", middleware.Auth(true), middleware.RequireAdmin(), admin.NewHandler(db.Query()))
+	r.POST("/admin/graphql", middleware.Auth(true), middleware.RequireAdmin(), admin.NewHandler(db.Query(), &deletion.Service{Transact: db.Transaction}))
 	public := r.Group("/")
 	{
 		public.POST("/auth/login", handlers.LoginRoute)
@@ -22,6 +23,7 @@ func RegisterRoutes(r *gin.Engine) {
 		public.GET("/image/:id", handlers.GetImage)
 		public.POST("/image/search", handlers.SearchImages)
 		public.GET("/image/:id/version", handlers.GetImageVersions)
+		public.GET("/image/:id/deletion", handlers.ListImageDeletionRequests)
 		public.GET("/user/:id/contribution", userHandlers.GetUserContribution)
 		public.GET("/user/:id", userHandlers.GetUser)
 		public.GET("/user/:id/image", userHandlers.ListImagesByUser)
@@ -39,6 +41,7 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.POST("/image/sign", handlers.CreateUploadSession)
 		protected.POST("/image/ack", handlers.AcknowledgeSession)
 		protected.PATCH("/image/:id", handlers.UpdateImage)
+		protected.POST("/image/:id/deletion", middleware.RequireDeletionPermission(), handlers.CreateImageDeletionRequest)
 		protected.GET("/user", userHandlers.GetSelf)
 
 		// Favorite
