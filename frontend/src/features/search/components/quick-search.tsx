@@ -1,21 +1,53 @@
 import { Dialog, DialogTitle, DialogTrigger } from "@/shared/components/ui/dialog";
 import { ResponsiveDialogContent } from "@/shared/components/ui/responsive-dialog";
-import { Dialog as BaseDialog } from '@base-ui/react';
-import { Button } from "@base-ui/react";
-import { Bookmark, Search } from "lucide-react";
+import { Dialog as BaseDialog, Button as BaseButton } from '@base-ui/react';
+import { Button } from "@/shared/components/ui/button";
+import { Bookmark, Copy, Search } from "lucide-react";
 import { useDebouncedState } from "@/shared/hooks/use-debounced-state";
 import useQuickSearch from "@/features/search/hooks/use-quick-search";
 import type { QuickSearchImage } from "@/features/search/hooks/use-quick-search";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/shared/components/ui/input-group";
 import { ScrollArea } from "@/shared/components/ui/scroll-area";
 import { Spinner } from "@/shared/components/ui/spinner";
+import { copyImage, formatError } from "@/shared/lib/utils";
+import { useState } from "react";
 import { Link } from "react-router";
+import { toast } from "sonner";
 
 type QuickSearchItem = QuickSearchImage & {
   favorited: boolean;
 };
 
 const handle = BaseDialog.createHandle();
+
+function CopyImageButton({ imageUrl }: { imageUrl: string }) {
+  const [copying, setCopying] = useState(false);
+
+  return (
+    <Button
+      variant='outline'
+      size='icon-sm'
+      aria-label='Copy image'
+      title='Copy image'
+      aria-busy={copying}
+      disabled={copying}
+      onClick={async () => {
+        setCopying(true);
+        try {
+          await copyImage(imageUrl);
+          toast.success('Copied to clipboard');
+        }
+        catch (error) {
+          toast.error(formatError(error));
+        }
+        finally {
+          setCopying(false);
+        }
+      }}>
+      {copying ? <Spinner /> : <Copy />}
+    </Button>
+  );
+}
 
 export default function QuickSearch() {
   const { debouncedState, setState, instantState, isPending } = useDebouncedState('', 500);
@@ -34,12 +66,12 @@ export default function QuickSearch() {
       }
     }}>
       <DialogTrigger render={
-        <Button aria-label='Quick search' className='xs:hidden md:flex w-12 md:w-48 rounded-md border border-gray-300 text-sm py-2 px-4 flex flex-row items-center justify-start gap-2 cursor-text text-muted-foreground hover:text-foreground'>
+        <BaseButton aria-label='Quick search' className='xs:hidden md:flex w-12 md:w-48 rounded-md border border-gray-300 text-sm py-2 px-4 flex flex-row items-center justify-start gap-2 cursor-text text-muted-foreground hover:text-foreground'>
           <Search className='inline' size={16} />
           <span className='md:block hidden'>
             Quick search...
           </span>
-        </Button>
+        </BaseButton>
       } />
 
       <ResponsiveDialogContent className='gap-2 px-4 md:max-w-xl md:border-4 md:border-gray-100 md:p-2' showCloseButton={false}>
@@ -72,30 +104,32 @@ export default function QuickSearch() {
           {!isLoading && !isPending && results.length !== 0 && (
             <ScrollArea className='w-full h-full'>
               {results.map(it => (
-                <Link
+                <div
                   key={`${it.favorited ? 'favorited' : 'filtered'}-${it.id}`}
-                  to={`/image/${it.id}`}
-                  onClick={() => handle.close()}>
-                  <div className='w-full h-24 p-2 rounded-md hover:bg-gray-100 flex flex-row'>
+                  className='w-full h-24 p-2 pr-6 rounded-md hover:bg-gray-100 flex flex-row items-center gap-2'>
+                  <Link
+                    className='h-full min-w-0 flex-1 flex flex-row'
+                    to={`/image/${it.id}`}
+                    onClick={() => handle.close()}>
                     <div className='h-full shrink-0 w-24'>
-                      <img className='h-full w-24 object-contain' src={it.imageUrl} crossOrigin="anonymous" />
+                      <img className='h-full w-24 object-contain' src={it.imageUrl} alt='' crossOrigin="anonymous" />
                     </div>
-                    <div className='p-2 flex flex-col h-full'>
+                    <div className='min-w-0 flex-1 p-2 flex flex-col h-full'>
                       <span className='text-wrap truncate text-ellipsis max-w-full'>
                         {it.text}
                       </span>
                     </div>
 
-                    <div className='flex-1' />
                     {it.favorited && (
-                      <div className='h-full flex flex-row items-center gap-2'>
+                      <div className='h-full shrink-0 flex flex-row items-center gap-2'>
                         <span className='bg-gray-100 border border-gray-250 rounded-md px-2 text-muted-foreground p-1'>
                           <Bookmark size={12} />
                         </span>
                       </div>
                     )}
-                  </div>
-                </Link>
+                  </Link>
+                  <CopyImageButton imageUrl={it.imageUrl} />
+                </div>
 
               ))}
             </ScrollArea>
