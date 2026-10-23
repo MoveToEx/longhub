@@ -12,13 +12,7 @@ type Props = {
 
 export default function PermissionTransferList({ mask, value, onValueChange }: Props) {
   const _toArray = (p: number) => {
-    const result: number[] = [];
-    while (p !== 0) {
-      const low = p & (-p);
-      result.push(low);
-      p ^= low;
-    }
-    return result;
+    return Object.keys(Permission).map(Number).filter(bit => (p & bit) !== 0);
   }
 
   const current = useMemo(() => _toArray(value), [value]);

@@ -6,7 +6,9 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(req => {
-  req.headers['Authorization'] = 'Session ' + JSON.parse(localStorage.getItem('nmsl-session') ?? '""')
+  if (!req.headers.has('Authorization')) {
+    req.headers['Authorization'] = 'Session ' + JSON.parse(localStorage.getItem('nmsl-session') ?? '""');
+  }
   return req;
 })
 

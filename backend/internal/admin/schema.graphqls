@@ -1,0 +1,59 @@
+scalar DateTime
+scalar Int64
+
+enum SortDirection { ASC DESC }
+enum ImageStatus { ACTIVE DELETED ALL }
+enum ImageSort { ID CREATED_AT UPDATED_AT }
+enum UserSort { ID USERNAME EMAIL CREATED_AT PERMISSION }
+enum ImageRating { none moderate violent }
+
+input ImageQueryInput {
+  offset: Int! = 0
+  limit: Int! = 25
+  search: String! = ""
+  status: ImageStatus! = ACTIVE
+  sortBy: ImageSort! = CREATED_AT
+  direction: SortDirection! = DESC
+}
+
+input UserQueryInput {
+  offset: Int! = 0
+  limit: Int! = 25
+  search: String! = ""
+  sortBy: UserSort! = CREATED_AT
+  direction: SortDirection! = DESC
+}
+
+type AdminUploader { id: ID!, username: String! }
+type AdminVersion {
+  id: ID!
+  version: Int!
+  text: String!
+  rating: ImageRating!
+  tags: [String!]!
+}
+type AdminImage {
+  id: ID!
+  imageUrl: String!
+  imageKey: String!
+  uploader: AdminUploader!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
+  currentVersion: AdminVersion
+}
+type AdminUser {
+  id: ID!
+  username: String!
+  email: String!
+  permission: Int64!
+  createdAt: DateTime!
+  activeImageCount: Int64!
+  versionCount: Int64!
+}
+type ImagePage { items: [AdminImage!]!, total: Int64! }
+type UserPage { items: [AdminUser!]!, total: Int64! }
+type Query {
+  images(input: ImageQueryInput): ImagePage!
+  users(input: UserQueryInput): UserPage!
+}

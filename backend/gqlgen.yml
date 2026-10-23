@@ -1,0 +1,18 @@
+schema:
+  - internal/admin/schema.graphqls
+exec:
+  filename: internal/admin/generated.go
+  package: admin
+model:
+  filename: internal/admin/model/models_gen.go
+  package: model
+resolver:
+  layout: follow-schema
+  dir: internal/admin
+  package: admin
+  filename_template: '{name}.resolvers.go'
+models:
+  Int64:
+    model: github.com/99designs/gqlgen/graphql.Int64
+  DateTime:
+    model: github.com/99designs/gqlgen/graphql.Time

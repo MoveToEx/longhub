@@ -1,4 +1,4 @@
-import { Bookmark, ChevronUp, CircleUserRound, ExternalLink, FileText, Home, LogIn, LogOut, Search, Settings, SquareMousePointer, User2 } from "lucide-react";
+import { Bookmark, ChevronUp, CircleUserRound, ExternalLink, FileText, Home, LogIn, LogOut, Search, Settings, Shield, SquareMousePointer, User2 } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/shared/components/ui/sidebar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/shared/components/ui/dropdown-menu";
 import useAuth from "@/features/auth/hooks/use-auth";
@@ -7,6 +7,7 @@ import { Dialog as BaseDialog } from '@base-ui/react';
 import LoginDialog from "@/features/auth/components/login-dialog";
 import { Link, useLocation, useNavigate } from "react-router";
 import { type FC } from "react";
+import { hasAdminPermission } from "@/shared/lib/const";
 
 const items = [
   {
@@ -149,6 +150,7 @@ function SidebarItem({ url, title, Icon }: {
 }
 
 export default function AppSidebar() {
+  const { data, isLoading, session } = useAuth();
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
@@ -157,6 +159,7 @@ export default function AppSidebar() {
             {items.map(({ url, icon, title }) => (
               <SidebarItem url={url} title={title} Icon={icon} key={title} />
             ))}
+            {!isLoading && session && hasAdminPermission(data?.permission) && <SidebarItem url="/admin" title="Admin" Icon={Shield} />}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

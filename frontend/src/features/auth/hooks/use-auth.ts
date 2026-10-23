@@ -12,6 +12,7 @@ export default function useAuth() {
       tags: ['user', 'auth'],
       args: [session],
       async fetcher(session) {
+        if (!session) return null;
         try {
           const response = await api.get<Wrapped<Identity>>('/auth', {
             headers: {
@@ -26,5 +27,6 @@ export default function useAuth() {
       },
     }),
     reset,
+    session,
   };
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"long/internal/db"
+	"long/internal/sqlc"
 	"long/internal/utils"
 	"strconv"
 	"strings"
@@ -20,7 +21,16 @@ func fail(c *gin.Context, status int, msg string, strict bool) {
 	}
 }
 
+type authQueries interface {
+	GetUserByAppKey(context.Context, string) (sqlc.GetUserByAppKeyRow, error)
+	UpdateAppKeyUsedDate(context.Context, int64) error
+}
+
 func Auth(strict bool) gin.HandlerFunc {
+	return auth(strict, db.Query())
+}
+
+func auth(strict bool, queries authQueries) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		val, ok := c.Request.Header["Authorization"]
 
@@ -29,9 +39,9 @@ func Auth(strict bool) gin.HandlerFunc {
 			return
 		}
 
-		parts := strings.Split(val[0], " ")
+		parts := strings.Fields(val[0])
 
-		if len(parts) < 2 {
+		if len(parts) != 2 {
 			fail(c, 401, "Invalid authorization", strict)
 			return
 		}
@@ -48,7 +58,7 @@ func Auth(strict bool) gin.HandlerFunc {
 			sub, err := strconv.ParseInt(claims.Subject, 10, 64)
 
 			if err != nil {
-				fail(c, 500, "Malformed sub", strict)
+				fail(c, 401, "Malformed sub", strict)
 				return
 			}
 
@@ -59,7 +69,7 @@ func Auth(strict bool) gin.HandlerFunc {
 			c.Next()
 		case "Key":
 			ctx := c.Request.Context()
-			user, err := db.Query().GetUserByAppKey(ctx, parts[1])
+			user, err := queries.GetUserByAppKey(ctx, parts[1])
 
 			if err != nil {
 				fail(c, 401, "Invalid key", strict)
@@ -69,7 +79,7 @@ func Auth(strict bool) gin.HandlerFunc {
 			keyID := user.KeyID
 
 			go func() {
-				db.Query().UpdateAppKeyUsedDate(context.Background(), keyID)
+				queries.UpdateAppKeyUsedDate(context.Background(), keyID)
 			}()
 
 			c.Set("UserID", user.ID)

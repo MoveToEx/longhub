@@ -11,8 +11,4 @@ const (
 	PermissionEdit
 	PermissionRequestDeletion
 	PermissionAdmin
-	PermissionApproveDeletion
-	PermissionRenameTag
-	PermissionGrant
-	PermissionManageUser
 )
