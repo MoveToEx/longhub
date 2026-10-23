@@ -11,8 +11,6 @@ import { Button } from "@/shared/components/ui/button";
 import { Checkbox } from "@/shared/components/ui/checkbox";
 import {
   Dialog,
-  DialogClose,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -28,6 +26,7 @@ import {
   FieldSet,
 } from "@/shared/components/ui/field";
 import { Input } from "@/shared/components/ui/input";
+import { ResponsiveDialogCancel, ResponsiveDialogContent } from "@/shared/components/ui/responsive-dialog";
 import { Spinner } from "@/shared/components/ui/spinner";
 import { Switch } from "@/shared/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
@@ -151,7 +150,7 @@ function WebhookFormContent({
   };
 
   return (
-    <DialogContent className='flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] flex-col overflow-hidden sm:max-w-6xl'>
+    <ResponsiveDialogContent className='flex flex-col overflow-hidden md:max-h-[calc(100dvh-2rem)] md:w-[calc(100%-2rem)] md:max-w-6xl'>
       <DialogHeader>
         <DialogTitle className='text-xl'>
           {mode === 'add' ? 'New webhook' : 'Edit webhook'}
@@ -263,7 +262,7 @@ function WebhookFormContent({
                 </Field>
               )} />
           </FieldGroup>
-          <FieldGroup className='min-w-0 border-t pt-6 md:border-t-0 md:border-l md:pt-0 md:pl-6'>
+          <FieldGroup className='min-w-0 md:border-l md:pl-6'>
             <Controller
               name='bodyTemplate'
               control={form.control}
@@ -308,12 +307,10 @@ function WebhookFormContent({
             {loading ? <Spinner /> : <Send />}
             {mode === 'add' ? 'Add webhook' : 'Save changes'}
           </Button>
-          <DialogClose disabled={loading} render={<Button variant='outline' />}>
-            Cancel
-          </DialogClose>
+          <ResponsiveDialogCancel disabled={loading} />
         </DialogFooter>
       </form>
-    </DialogContent>
+    </ResponsiveDialogContent>
   );
 }
 
