@@ -25,6 +25,7 @@ const columns: AdminColumn<AdminImage>[] = [
       <a href={row.imageUrl} target="_blank" rel="noreferrer">
         <img
           src={row.imageUrl}
+          crossOrigin="anonymous"
           alt={`Image ${row.id}`}
           loading="lazy"
           className="size-16 rounded-md border bg-muted object-contain"
