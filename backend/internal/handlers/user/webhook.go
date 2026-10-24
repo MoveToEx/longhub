@@ -17,15 +17,16 @@ import (
 )
 
 type ListWebhooksResponse struct {
-	ID                 int64      `json:"id"`
-	Label              string     `json:"label"`
-	EventTypes         int64      `json:"eventTypes"`
-	Endpoint           string     `json:"endpoint"`
-	Active             bool       `json:"active"`
-	LastActivatedAt    *time.Time `json:"lastActivatedAt"`
-	LastResponseStatus *int32     `json:"lastResponseStatus"`
-	FailureCount       int32      `json:"failureCount"`
-	BodyTemplate       *string    `json:"bodyTemplate"`
+	ID                 int64             `json:"id"`
+	Label              string            `json:"label"`
+	EventTypes         int64             `json:"eventTypes"`
+	Endpoint           string            `json:"endpoint"`
+	Active             bool              `json:"active"`
+	LastActivatedAt    *time.Time        `json:"lastActivatedAt"`
+	LastResponseStatus *int32            `json:"lastResponseStatus"`
+	FailureCount       int32             `json:"failureCount"`
+	BodyTemplate       *string           `json:"bodyTemplate"`
+	HeaderTemplates    map[string]string `json:"headerTemplates"`
 }
 
 func ListWebhooks(c *gin.Context) {
@@ -55,6 +56,10 @@ func ListWebhooks(c *gin.Context) {
 		if webhooks[i].BodyTemplate.Valid {
 			bodyTemplate = &webhooks[i].BodyTemplate.String
 		}
+		headers := webhooks[i].HeaderTemplates
+		if headers == nil {
+			headers = map[string]string{}
+		}
 		result = append(result, ListWebhooksResponse{
 			ID:                 webhooks[i].ID,
 			Label:              webhooks[i].Label,
@@ -65,6 +70,7 @@ func ListWebhooks(c *gin.Context) {
 			LastResponseStatus: status,
 			FailureCount:       webhooks[i].FailureCount,
 			BodyTemplate:       bodyTemplate,
+			HeaderTemplates:    headers,
 		})
 	}
 
@@ -72,12 +78,13 @@ func ListWebhooks(c *gin.Context) {
 }
 
 type CreateWebhookPayload struct {
-	Label        string  `json:"label"`
-	EventTypes   int64   `json:"eventTypes"`
-	Secret       string  `json:"secret"`
-	Endpoint     string  `json:"endpoint"`
-	Active       bool    `json:"active"`
-	BodyTemplate *string `json:"bodyTemplate"`
+	Label           string          `json:"label"`
+	EventTypes      int64           `json:"eventTypes"`
+	Secret          string          `json:"secret"`
+	Endpoint        string          `json:"endpoint"`
+	Active          bool            `json:"active"`
+	BodyTemplate    *string         `json:"bodyTemplate"`
+	HeaderTemplates json.RawMessage `json:"headerTemplates"`
 }
 
 type CreateWebhookResponse struct {
@@ -93,6 +100,15 @@ func CreateWebhook(c *gin.Context) {
 	}
 	bodyTemplate := nullableBodyTemplate(payload.BodyTemplate)
 	if err := validateBodyTemplate(bodyTemplate, payload.EventTypes); err != nil {
+		utils.ErrorResponse(c, 400, "%s", err.Error())
+		return
+	}
+	headers, err := decodeHeaderTemplates(payload.HeaderTemplates)
+	if err != nil {
+		utils.ErrorResponse(c, 400, "%s", err.Error())
+		return
+	}
+	if err := validateHeaderTemplates(headers, payload.EventTypes); err != nil {
 		utils.ErrorResponse(c, 400, "%s", err.Error())
 		return
 	}
@@ -113,13 +129,14 @@ func CreateWebhook(c *gin.Context) {
 	}
 
 	hook, err := db.Query().NewWebhook(ctx, sqlc.NewWebhookParams{
-		UserID:       userID,
-		Label:        payload.Label,
-		Secret:       payload.Secret,
-		EventTypes:   payload.EventTypes,
-		Endpoint:     payload.Endpoint,
-		Active:       payload.Active,
-		BodyTemplate: bodyTemplate,
+		UserID:          userID,
+		Label:           payload.Label,
+		Secret:          payload.Secret,
+		EventTypes:      payload.EventTypes,
+		Endpoint:        payload.Endpoint,
+		Active:          payload.Active,
+		BodyTemplate:    bodyTemplate,
+		HeaderTemplates: encodeHeaderTemplates(headers),
 	})
 
 	if err != nil {
@@ -133,13 +150,14 @@ func CreateWebhook(c *gin.Context) {
 }
 
 type EditWebhookPayload struct {
-	ID           int64           `uri:"id"`
-	Label        *string         `json:"label"`
-	EventTypes   *int64          `json:"eventTypes"`
-	Secret       *string         `json:"secret"`
-	Endpoint     *string         `json:"endpoint"`
-	Active       *bool           `json:"active"`
-	BodyTemplate json.RawMessage `json:"bodyTemplate"`
+	ID              int64           `uri:"id"`
+	Label           *string         `json:"label"`
+	EventTypes      *int64          `json:"eventTypes"`
+	Secret          *string         `json:"secret"`
+	Endpoint        *string         `json:"endpoint"`
+	Active          *bool           `json:"active"`
+	BodyTemplate    json.RawMessage `json:"bodyTemplate"`
+	HeaderTemplates json.RawMessage `json:"headerTemplates"`
 }
 
 func EditWebhook(c *gin.Context) {
@@ -173,13 +191,14 @@ func EditWebhook(c *gin.Context) {
 	}
 
 	args := sqlc.UpdateWebhookParams{
-		Label:        webhook.Label,
-		Endpoint:     webhook.Endpoint,
-		EventTypes:   webhook.EventTypes,
-		Secret:       webhook.Secret,
-		ID:           webhook.ID,
-		Active:       webhook.Active,
-		BodyTemplate: webhook.BodyTemplate,
+		Label:           webhook.Label,
+		Endpoint:        webhook.Endpoint,
+		EventTypes:      webhook.EventTypes,
+		Secret:          webhook.Secret,
+		ID:              webhook.ID,
+		Active:          webhook.Active,
+		BodyTemplate:    webhook.BodyTemplate,
+		HeaderTemplates: encodeHeaderTemplates(webhook.HeaderTemplates),
 	}
 
 	if payload.Endpoint != nil {
@@ -211,6 +230,21 @@ func EditWebhook(c *gin.Context) {
 			return
 		}
 	}
+	headers := webhook.HeaderTemplates
+	if payload.HeaderTemplates != nil {
+		headers, err = decodeHeaderTemplates(payload.HeaderTemplates)
+		if err != nil {
+			utils.ErrorResponse(c, 400, "%s", err.Error())
+			return
+		}
+		args.HeaderTemplates = encodeHeaderTemplates(headers)
+	}
+	if payload.HeaderTemplates != nil || payload.EventTypes != nil {
+		if err := validateHeaderTemplates(headers, args.EventTypes); err != nil {
+			utils.ErrorResponse(c, 400, "%s", err.Error())
+			return
+		}
+	}
 
 	err = db.Query().UpdateWebhook(ctx, args)
 
@@ -233,6 +267,53 @@ func validateBodyTemplate(value pgtype.Text, eventTypes int64) error {
 	if !value.Valid {
 		return nil
 	}
+	return validateWebhookEvents(eventTypes, func(event string) error {
+		_, err := webhookpayload.Render(value.String, event, webhookpayload.PreviewData(event), webhookpayload.PreviewInitiator(event))
+		if err != nil {
+			return fmt.Errorf("Invalid body template for %s: %w", event, err)
+		}
+		return nil
+	})
+}
+
+func decodeHeaderTemplates(raw json.RawMessage) (map[string]string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	var values map[string]*string
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return nil, errors.New("Header templates must be an object with string values or null")
+	}
+	headers := make(map[string]string, len(values))
+	for name, value := range values {
+		if value == nil {
+			return nil, fmt.Errorf("Template for header %q must be a string", name)
+		}
+		headers[name] = *value
+	}
+	return headers, nil
+}
+
+func encodeHeaderTemplates(headers map[string]string) []byte {
+	if headers == nil {
+		return []byte("{}")
+	}
+	// A map of strings always encodes successfully.
+	encoded, _ := json.Marshal(headers)
+	return encoded
+}
+
+func validateHeaderTemplates(headers map[string]string, eventTypes int64) error {
+	return validateWebhookEvents(eventTypes, func(event string) error {
+		_, err := webhookpayload.RenderHeaders(headers, event, webhookpayload.PreviewData(event), webhookpayload.PreviewInitiator(event))
+		if err != nil {
+			return fmt.Errorf("Invalid header templates for %s: %w", event, err)
+		}
+		return nil
+	})
+}
+
+func validateWebhookEvents(eventTypes int64, validate func(string) error) error {
 	eventTypes &= db.WebhookCreationEvent | db.WebhookUpdateEvent | db.WebhookDeletionEvent
 	for _, event := range []struct {
 		flag int64
@@ -246,8 +327,8 @@ func validateBodyTemplate(value pgtype.Text, eventTypes int64) error {
 		if eventTypes&event.flag == 0 && eventTypes != 0 {
 			continue
 		}
-		if _, err := webhookpayload.Render(value.String, event.name, webhookpayload.PreviewData(event.name), webhookpayload.PreviewInitiator(event.name)); err != nil {
-			return fmt.Errorf("Invalid body template for %s: %w", event.name, err)
+		if err := validate(event.name); err != nil {
+			return err
 		}
 	}
 	return nil

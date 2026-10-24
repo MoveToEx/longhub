@@ -111,6 +111,53 @@ describe("webhook gateway", () => {
 		expect(await response.json()).toEqual({ error: "Invalid server signature" });
 	});
 
+	it("forwards multiple rendered headers and a custom content type", async () => {
+		const clientSignature = "a1".repeat(32);
+		fetchMock.get("https://client.example").intercept({
+			path: "/headers", method: "POST", body: "{}",
+			headers: {
+				"content-type": "application/vnd.longhub+json",
+				"x-signature": clientSignature,
+				"authorization": "Bearer token", "x-event": "image.restore", "x-image-id": "42",
+			},
+		}).reply(204);
+		const response = await invoke(await signedRequest({
+			url: "https://client.example/headers", body: "{}", clientSignature,
+			headers: { "Authorization": "Bearer token", "X-Event": "image.restore", "X-Image-ID": "42", "Content-Type": "application/vnd.longhub+json" },
+		}));
+		expect(response.status).toBe(204);
+		fetchMock.assertNoPendingInterceptors();
+	});
+
+	it.each([
+		null, [], "headers", { "X-Test": 1 }, { "X-Test": null },
+		{ "Bad Name": "value" }, { "": "value" }, { "X-Test": "bad\r\nInjected: true" },
+		{ "X-Test": "\x00" }, { "X-Test": "世界" }, { "X-Test": "value", "x-test": "other" },
+		{ "x-signature": "override" }, { "X-Server-Signature": "override" },
+		{ "Host": "example.com" }, { "Content-Length": "1" }, { "Connection": "close" },
+		{ "Transfer-Encoding": "chunked" }, { "Proxy-Authorization": "token" },
+		{ "X-Test": "x".repeat(8 * 1024 + 1) },
+		Object.fromEntries(Array.from({ length: 33 }, (_, i) => [`X-${i}`, "value"])),
+		Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`X-${i}`, "x".repeat(8 * 1024)])),
+	])("rejects invalid or reserved headers: %#", async (headers) => {
+		const response = await invoke(await signedRequest({
+			url: "https://client.example/headers", body: "{}", clientSignature: "a1".repeat(32), headers,
+		}));
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({ error: "Invalid webhook invocation" });
+	});
+
+	it("authenticates custom headers as part of the signed envelope", async () => {
+		const invocation = {
+			url: "https://client.example/headers", body: "{}", clientSignature: "a1".repeat(32),
+			headers: { Authorization: "Bearer original" },
+		};
+		const signed = await signedRequest(invocation);
+		invocation.headers.Authorization = "Bearer tampered";
+		const response = await invoke(new IncomingRequest(signed, { body: JSON.stringify(invocation) }));
+		expect(response.status).toBe(401);
+	});
+
 	it("rejects non-HTTP webhook URLs", async () => {
 		const request = await signedRequest({
 			url: "file:///etc/passwd",

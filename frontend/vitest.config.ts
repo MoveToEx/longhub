@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   test: {
     environment: 'jsdom',
-    include: ['tests/admin*.test.tsx'],
+    include: ['tests/admin*.test.tsx', 'tests/webhook-dialog.test.tsx'],
     setupFiles: ['./tests/admin-setup.ts'],
     restoreMocks: true,
   },

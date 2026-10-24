@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { renderWebhookBodyPreview } from '../src/features/settings/lib/webhook-body-preview.ts';
+import { renderWebhookBodyPreview, renderWebhookHeadersPreview } from '../src/features/settings/lib/webhook-body-preview.ts';
 
 test('default preview preserves the envelope and includes changes only for update', () => {
   for (const event of ['create', 'update', 'delete', 'restore']) {
@@ -93,4 +93,28 @@ test('source limits use UTF-8 bytes and rendered output is bounded', () => {
     '{{range .Tags}}{{range $.Tags}}{{range $.Tags}}{{range $.Tags}}{{range $.Tags}}{{range $.Tags}}{{range $.Tags}}{{range $.Tags}}' + 'x'.repeat(1025) + '{{end}}'.repeat(8),
     'create',
   ), /256 KiB/);
+});
+
+test('multiple headers render plain text using body fields and lifecycle events', () => {
+  for (const event of ['create', 'update', 'delete', 'restore']) {
+    assert.equal(renderWebhookHeadersPreview([
+      { name: 'Authorization', value: 'Bearer token' },
+      { name: 'X-Event', value: '{{.Event | printf "image.%s"}}' },
+      { name: 'X-Image-ID', value: '{{.Data.ImageID}}' },
+      { name: 'X-Actor', value: '{{.Initiator.Username}}' },
+    ], event), `Authorization: Bearer token\nX-Event: image.${event}\nX-Image-ID: 42\nX-Actor: ${event === 'create' ? 'image-owner' : 'image-editor'}`);
+  }
+  assert.equal(renderWebhookHeadersPreview([], 'create'), '');
+  assert.equal(renderWebhookHeadersPreview([{ name: 'X-Empty', value: '' }], 'create'), 'X-Empty: ');
+});
+
+test('header previews reject invalid names, templates, values and case-insensitive duplicates', () => {
+  for (const name of ['', 'Bad Name', 'X-Signature', 'HOST', 'Content-Length', 'Proxy-Authorization']) {
+    assert.throws(() => renderWebhookHeadersPreview([{ name, value: 'value' }], 'create'));
+  }
+  for (const value of ['{{', '{{.Missing}}', 'bad\r\nInjected: true', '\x00', '世界', 'x'.repeat(8 * 1024 + 1)]) {
+    assert.throws(() => renderWebhookHeadersPreview([{ name: 'X-Test', value }], 'create'));
+  }
+  assert.throws(() => renderWebhookHeadersPreview([{ name: 'X-Test', value: 'a' }, { name: 'x-test', value: 'b' }], 'create'), /Duplicate header/);
+  assert.throws(() => renderWebhookHeadersPreview(Array.from({ length: 33 }, (_, i) => ({ name: `X-${i}`, value: 'value' })), 'create'), /32 custom headers/);
 });

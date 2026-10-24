@@ -12,6 +12,9 @@ sql:
         json_tags_case_style: "camel"
         emit_empty_slices: true
         overrides:
+          - column: "webhook.header_templates"
+            go_type:
+              type: "map[string]string"
           - column: "user.preference"
             go_type:
               import: "long/internal/types"

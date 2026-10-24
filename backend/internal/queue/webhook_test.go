@@ -131,3 +131,43 @@ func TestRestorationInvocationAndLegacyDeletion(t *testing.T) {
 		t.Fatal("restoration escaped deletion subscription")
 	}
 }
+
+func TestInvocationHeadersUseOriginalSnapshotAndLifecycleEvent(t *testing.T) {
+	data := webhook.PreviewData("restore")
+	initiator := webhook.PreviewInitiator("restore")
+	task, err := NewInvokeTask(1, data.ImageID, 2, db.WebhookDeletionEvent, data, initiator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data.Text = "later caption"
+	initiator.Username = "renamed user"
+	var args InvokeArgs
+	if err := json.Unmarshal(task.Payload(), &args); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := json.Marshal(string(args.Body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []json.RawMessage{args.Body, legacy} {
+		body, err := decodeInvokeBody(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, event := range []string{"", "delete", "restore"} {
+			headers, err := buildInvocationHeaders(args.EventType, body, map[string]string{
+				"X-Event": `{{.Event}}`, "X-Text": `{{.Text}}`, "X-Actor": `{{.Initiator.Username}}`,
+			}, args.Initiator, event)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantEvent := event
+			if wantEvent == "" {
+				wantEvent = "delete"
+			}
+			if headers["X-Event"] != wantEvent || headers["X-Text"] != "Updated image caption" || headers["X-Actor"] != "image-editor" {
+				t.Fatalf("headers lost event snapshot: %+v", headers)
+			}
+		}
+	}
+}

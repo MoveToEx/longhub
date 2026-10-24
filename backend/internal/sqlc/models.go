@@ -285,4 +285,5 @@ type Webhook struct {
 	LastResponseStatus pgtype.Int4        `json:"lastResponseStatus"`
 	FailureCount       int32              `json:"failureCount"`
 	BodyTemplate       pgtype.Text        `json:"bodyTemplate"`
+	HeaderTemplates    map[string]string  `json:"headerTemplates"`
 }

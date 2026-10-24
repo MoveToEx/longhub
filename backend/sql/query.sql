@@ -615,8 +615,8 @@ SELECT COUNT(*) FROM webhook
 WHERE user_id = $1;
 
 -- name: NewWebhook :one
-INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active, body_template)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active, body_template, header_templates)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE(sqlc.narg(header_templates)::jsonb, '{}'::jsonb))
 RETURNING *;
 
 -- name: DeleteWebhook :exec
@@ -631,7 +631,8 @@ SET label = $1,
     secret = $4,
     failure_count = CASE WHEN active = FALSE AND $5 = TRUE THEN 0 ELSE failure_count END,
     active = $5,
-    body_template = $7
+    body_template = $7,
+    header_templates = COALESCE(sqlc.narg(header_templates)::jsonb, '{}'::jsonb)
 WHERE id = $6;
 
 -- name: GetWebhooks :many

@@ -87,21 +87,27 @@ func Parse(bodyTemplate string) (*template.Template, error) {
 	if len(bodyTemplate) > MaxTemplateSize {
 		return nil, errors.New("body template exceeds 64 KiB")
 	}
+	return parseTemplate(bodyTemplate)
+}
+
+func parseTemplate(source string) (*template.Template, error) {
 	return template.New("webhook").Funcs(template.FuncMap{
 		"json": func(value any) (string, error) {
 			data, err := json.Marshal(value)
 			return string(data), err
 		},
-	}).Parse(bodyTemplate)
+	}).Parse(source)
 }
 
-type payloadBuffer struct {
-	buffer bytes.Buffer
+type templateBuffer struct {
+	buffer     bytes.Buffer
+	maxSize    int
+	limitError string
 }
 
-func (b *payloadBuffer) Write(data []byte) (int, error) {
-	if len(data) > MaxPayloadSize-b.buffer.Len() {
-		return 0, errors.New("rendered body exceeds 256 KiB")
+func (b *templateBuffer) Write(data []byte) (int, error) {
+	if len(data) > b.maxSize-b.buffer.Len() {
+		return 0, errors.New(b.limitError)
 	}
 	return b.buffer.Write(data)
 }
@@ -120,7 +126,7 @@ func Render(bodyTemplate, event string, data Data, initiator *User) ([]byte, err
 	if err != nil {
 		return nil, fmt.Errorf("invalid body template: %w", err)
 	}
-	var output payloadBuffer
+	output := templateBuffer{maxSize: MaxPayloadSize, limitError: "rendered body exceeds 256 KiB"}
 	if err := tmpl.Execute(&output, templateFields{Event: event, Data: data, Initiator: initiator}); err != nil {
 		return nil, fmt.Errorf("failed to render body template: %w", err)
 	}

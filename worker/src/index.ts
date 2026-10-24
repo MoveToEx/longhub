@@ -12,6 +12,34 @@ interface WebhookInvocation {
 	url: string;
 	body: string;
 	clientSignature: string;
+	headers: Record<string, string>;
+}
+
+const RESERVED_HEADERS = new Set([
+	"x-signature", "x-server-signature", "host", "content-length", "connection",
+	"keep-alive", "te", "trailer", "transfer-encoding", "upgrade",
+]);
+
+function parseHeaders(value: unknown): Record<string, string> | null {
+	if (value === undefined) return {};
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+	const entries = Object.entries(value);
+	if (entries.length > 32) return null;
+	const names = new Set<string>();
+	let size = 0;
+	for (const [name, headerValue] of entries) {
+		const normalized = name.toLowerCase();
+		if (
+			!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) ||
+			RESERVED_HEADERS.has(normalized) || normalized.startsWith("proxy-") ||
+			names.has(normalized) || typeof headerValue !== "string" ||
+			/[^\t\x20-\x7e]/.test(headerValue) || headerValue.length > 8 * 1024
+		) return null;
+		names.add(normalized);
+		size += name.length + headerValue.length;
+		if (size > 64 * 1024) return null;
+	}
+	return Object.fromEntries(entries) as Record<string, string>;
 }
 
 function jsonResponse(status: number, error: string): Response {
@@ -77,11 +105,14 @@ function parseInvocation(rawBody: ArrayBuffer): WebhookInvocation | null {
 	) {
 		return null;
 	}
+	const headers = parseHeaders(invocation.headers);
+	if (headers === null) return null;
 
 	return {
 		url: invocation.url,
 		body: invocation.body,
 		clientSignature: invocation.clientSignature,
+		headers,
 	};
 }
 
@@ -244,12 +275,14 @@ export default {
 		}
 
 		try {
+			const headers = new Headers({ "Content-Type": "application/json" });
+			for (const [name, value] of Object.entries(invocation.headers)) {
+				headers.set(name, value);
+			}
+			headers.set(CLIENT_SIGNATURE_HEADER, invocation.clientSignature);
 			return await fetch(targetUrl, {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					[CLIENT_SIGNATURE_HEADER]: invocation.clientSignature,
-				},
+				headers,
 				body: invocation.body,
 				redirect: "manual",
 			});

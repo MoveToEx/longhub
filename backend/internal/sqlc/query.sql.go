@@ -1774,7 +1774,7 @@ func (q *Queries) GetUserContribution(ctx context.Context, userID int64) ([]GetU
 const getWebhook = `-- name: GetWebhook :one
 
 
-SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template FROM webhook
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template, header_templates FROM webhook
 WHERE id = $1
 `
 
@@ -1796,12 +1796,13 @@ func (q *Queries) GetWebhook(ctx context.Context, id int64) (Webhook, error) {
 		&i.LastResponseStatus,
 		&i.FailureCount,
 		&i.BodyTemplate,
+		&i.HeaderTemplates,
 	)
 	return i, err
 }
 
 const getWebhooks = `-- name: GetWebhooks :many
-SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template FROM webhook
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template, header_templates FROM webhook
 WHERE active = TRUE AND failure_count < $3
 ORDER BY id ASC
 LIMIT $1 OFFSET $2
@@ -1835,6 +1836,7 @@ func (q *Queries) GetWebhooks(ctx context.Context, arg GetWebhooksParams) ([]Web
 			&i.LastResponseStatus,
 			&i.FailureCount,
 			&i.BodyTemplate,
+			&i.HeaderTemplates,
 		); err != nil {
 			return nil, err
 		}
@@ -1847,7 +1849,7 @@ func (q *Queries) GetWebhooks(ctx context.Context, arg GetWebhooksParams) ([]Web
 }
 
 const getWebhooksByEvent = `-- name: GetWebhooksByEvent :many
-SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template FROM webhook
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template, header_templates FROM webhook
 WHERE id > $1
   AND event_types & $2::BIGINT != 0
   AND active = TRUE
@@ -1890,6 +1892,7 @@ func (q *Queries) GetWebhooksByEvent(ctx context.Context, arg GetWebhooksByEvent
 			&i.LastResponseStatus,
 			&i.FailureCount,
 			&i.BodyTemplate,
+			&i.HeaderTemplates,
 		); err != nil {
 			return nil, err
 		}
@@ -1902,7 +1905,7 @@ func (q *Queries) GetWebhooksByEvent(ctx context.Context, arg GetWebhooksByEvent
 }
 
 const getWebhooksByUser = `-- name: GetWebhooksByUser :many
-SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template FROM webhook
+SELECT id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template, header_templates FROM webhook
 WHERE user_id = $1
 `
 
@@ -1928,6 +1931,7 @@ func (q *Queries) GetWebhooksByUser(ctx context.Context, userID int64) ([]Webhoo
 			&i.LastResponseStatus,
 			&i.FailureCount,
 			&i.BodyTemplate,
+			&i.HeaderTemplates,
 		); err != nil {
 			return nil, err
 		}
@@ -2042,19 +2046,20 @@ func (q *Queries) MarkUploadSessionAsExpired(ctx context.Context, id int64) erro
 }
 
 const newWebhook = `-- name: NewWebhook :one
-INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active, body_template)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template
+INSERT INTO webhook(user_id, label, endpoint, event_types, secret, active, body_template, header_templates)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::jsonb, '{}'::jsonb))
+RETURNING id, active, created_at, user_id, event_types, label, endpoint, secret, last_activated_at, last_response_status, failure_count, body_template, header_templates
 `
 
 type NewWebhookParams struct {
-	UserID       int64       `json:"userId"`
-	Label        string      `json:"label"`
-	Endpoint     string      `json:"endpoint"`
-	EventTypes   int64       `json:"eventTypes"`
-	Secret       string      `json:"secret"`
-	Active       bool        `json:"active"`
-	BodyTemplate pgtype.Text `json:"bodyTemplate"`
+	UserID          int64       `json:"userId"`
+	Label           string      `json:"label"`
+	Endpoint        string      `json:"endpoint"`
+	EventTypes      int64       `json:"eventTypes"`
+	Secret          string      `json:"secret"`
+	Active          bool        `json:"active"`
+	BodyTemplate    pgtype.Text `json:"bodyTemplate"`
+	HeaderTemplates []byte      `json:"headerTemplates"`
 }
 
 func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook, error) {
@@ -2066,6 +2071,7 @@ func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook
 		arg.Secret,
 		arg.Active,
 		arg.BodyTemplate,
+		arg.HeaderTemplates,
 	)
 	var i Webhook
 	err := row.Scan(
@@ -2081,6 +2087,7 @@ func (q *Queries) NewWebhook(ctx context.Context, arg NewWebhookParams) (Webhook
 		&i.LastResponseStatus,
 		&i.FailureCount,
 		&i.BodyTemplate,
+		&i.HeaderTemplates,
 	)
 	return i, err
 }
@@ -2324,18 +2331,20 @@ SET label = $1,
     secret = $4,
     failure_count = CASE WHEN active = FALSE AND $5 = TRUE THEN 0 ELSE failure_count END,
     active = $5,
-    body_template = $7
+    body_template = $7,
+    header_templates = COALESCE($8::jsonb, '{}'::jsonb)
 WHERE id = $6
 `
 
 type UpdateWebhookParams struct {
-	Label        string      `json:"label"`
-	Endpoint     string      `json:"endpoint"`
-	EventTypes   int64       `json:"eventTypes"`
-	Secret       string      `json:"secret"`
-	Active       bool        `json:"active"`
-	ID           int64       `json:"id"`
-	BodyTemplate pgtype.Text `json:"bodyTemplate"`
+	Label           string      `json:"label"`
+	Endpoint        string      `json:"endpoint"`
+	EventTypes      int64       `json:"eventTypes"`
+	Secret          string      `json:"secret"`
+	Active          bool        `json:"active"`
+	ID              int64       `json:"id"`
+	BodyTemplate    pgtype.Text `json:"bodyTemplate"`
+	HeaderTemplates []byte      `json:"headerTemplates"`
 }
 
 func (q *Queries) UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) error {
@@ -2347,6 +2356,7 @@ func (q *Queries) UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) er
 		arg.Active,
 		arg.ID,
 		arg.BodyTemplate,
+		arg.HeaderTemplates,
 	)
 	return err
 }

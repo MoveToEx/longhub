@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS "webhook" (
 	"last_response_status" INTEGER,
 	"failure_count" INTEGER NOT NULL DEFAULT 0,
 	"body_template" TEXT,
+	"header_templates" JSONB NOT NULL DEFAULT '{}'::jsonb,
 	PRIMARY KEY("id")
 );
 

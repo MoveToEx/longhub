@@ -1,12 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog as BaseDialog } from "@base-ui/react";
-import { KeyRound, Send } from "lucide-react";
+import { KeyRound, Plus, Send, Trash2 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import z from "zod";
 
 import useWebhooks from "@/features/settings/hooks/use-webhooks";
+import { MAX_WEBHOOK_HEADERS, MAX_WEBHOOK_HEADERS_SIZE, webhookHeaderNameError } from '@/features/settings/lib/webhook-headers';
 import { Button } from "@/shared/components/ui/button";
 import { Checkbox } from "@/shared/components/ui/checkbox";
 import {
@@ -29,6 +30,7 @@ import { Input } from "@/shared/components/ui/input";
 import { ResponsiveDialogCancel, ResponsiveDialogContent } from "@/shared/components/ui/responsive-dialog";
 import { Spinner } from "@/shared/components/ui/spinner";
 import { Switch } from "@/shared/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import api from "@/shared/lib/axios";
 import type { Webhook } from "@/shared/lib/types";
@@ -65,6 +67,23 @@ const baseSchema = z.object({
   secret: z.string(),
   active: z.boolean(),
   bodyTemplate: z.string(),
+  headerTemplates: z.array(z.object({
+    name: z.string().superRefine((value, ctx) => {
+      const error = webhookHeaderNameError(value);
+      if (error) ctx.addIssue({ code: 'custom', message: error });
+    }),
+    value: z.string(),
+  })).max(MAX_WEBHOOK_HEADERS, 'At most 32 custom headers are allowed.').superRefine((headers, ctx) => {
+    const names = new Set<string>();
+    for (const [index, header] of headers.entries()) {
+      const name = header.name.toLowerCase();
+      if (names.has(name)) ctx.addIssue({ code: 'custom', path: [index, 'name'], message: 'Header names must be unique (case-insensitive).' });
+      names.add(name);
+    }
+    if (headers.reduce((size, header) => size + new TextEncoder().encode(header.name + header.value).length, 0) > MAX_WEBHOOK_HEADERS_SIZE) {
+      ctx.addIssue({ code: 'custom', message: 'Header templates exceed 64 KiB.' });
+    }
+  }),
 });
 
 function schemaFor(mode: 'add' | 'edit') {
@@ -104,8 +123,12 @@ function WebhookFormContent({
       secret: '',
       active: webhook?.active ?? true,
       bodyTemplate: webhook?.bodyTemplate ?? DEFAULT_BODY_TEMPLATE,
+      headerTemplates: Object.entries(webhook?.headerTemplates ?? {}).map(([name, value]) => ({ name, value })),
     },
   });
+  const { fields: headerFields, append: appendHeader, remove: removeHeader } = useFieldArray({ control: form.control, name: 'headerTemplates' });
+  const bodyTemplate = useWatch({ control: form.control, name: 'bodyTemplate' });
+  const headerTemplates = useWatch({ control: form.control, name: 'headerTemplates' });
 
   useEffect(() => {
     form.reset({
@@ -115,6 +138,7 @@ function WebhookFormContent({
       secret: '',
       active: webhook?.active ?? true,
       bodyTemplate: webhook?.bodyTemplate ?? DEFAULT_BODY_TEMPLATE,
+      headerTemplates: Object.entries(webhook?.headerTemplates ?? {}).map(([name, value]) => ({ name, value })),
     });
   }, [form, webhook]);
 
@@ -122,12 +146,13 @@ function WebhookFormContent({
     setLoading(true);
 
     try {
-      const payload: Partial<WebhookForm> = {
+      const payload: Partial<Omit<WebhookForm, 'headerTemplates'>> & { headerTemplates: Record<string, string> } = {
         label: values.label,
         endpoint: values.endpoint,
         eventTypes: values.eventTypes,
         active: values.active,
         bodyTemplate: values.bodyTemplate,
+        headerTemplates: Object.fromEntries(values.headerTemplates.map(({ name, value }) => [name, value])),
       };
       if (values.secret.trim()) payload.secret = values.secret;
 
@@ -215,23 +240,33 @@ function WebhookFormContent({
                 <FieldSet data-invalid={fieldState.invalid}>
                   <FieldLegend variant='label'>Events</FieldLegend>
                   <div className='grid gap-2 @sm/field-group:grid-cols-3'>
-                    {WEBHOOK_EVENTS.map(event => (
-                      <FieldLabel key={event.value}>
-                        <Field orientation='horizontal'>
-                          <Checkbox
-                            checked={(field.value & event.value) !== 0}
-                            onCheckedChange={(checked) => {
-                              field.onChange(checked
-                                ? field.value | event.value
-                                : field.value & ~event.value);
-                            }}
-                          />
-                          <div className='flex flex-col gap-1'>
-                            <span>{event.label}</span>
-                          </div>
-                        </Field>
-                      </FieldLabel>
-                    ))}
+                    {WEBHOOK_EVENTS.map(event => {
+                      const label = event.value === 4 ? 'Deletion' : event.label;
+                      const checkbox = (
+                        <FieldLabel key={event.value}>
+                          <Field orientation='horizontal'>
+                            <Checkbox
+                              aria-label={label}
+                              checked={(field.value & event.value) !== 0}
+                              onCheckedChange={(checked) => {
+                                field.onChange(checked
+                                  ? field.value | event.value
+                                  : field.value & ~event.value);
+                              }}
+                            />
+                            <div className='flex flex-col gap-1'>
+                              <span>{label}</span>
+                            </div>
+                          </Field>
+                        </FieldLabel>
+                      );
+                      return event.value === 4 ? (
+                        <Tooltip key={event.value}>
+                          <TooltipTrigger render={checkbox} />
+                          <TooltipContent>Also includes restoration</TooltipContent>
+                        </Tooltip>
+                      ) : checkbox;
+                    })}
                   </div>
                   {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                 </FieldSet>
@@ -262,6 +297,44 @@ function WebhookFormContent({
                   {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                 </Field>
               )} />
+            <FieldSet className='gap-3'>
+              <FieldLegend variant='label' className='mb-0 flex w-full items-center justify-between gap-2 py-2'>
+                <span>Custom headers</span>
+                <Button type='button' variant='outline' size='sm' disabled={headerFields.length >= MAX_WEBHOOK_HEADERS} onClick={() => appendHeader({ name: '', value: '' })}>
+                  <Plus /> Add header
+                </Button>
+              </FieldLegend>
+              {headerFields.length > 0 && (
+                <div className='max-h-64 space-y-2 overflow-y-auto rounded-md border p-2'>
+                  {headerFields.map((header, index) => (
+                    <div key={header.id} className='grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] items-center gap-2'>
+                      <Controller
+                        name={`headerTemplates.${index}.name`}
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                          <Field data-invalid={fieldState.invalid} className='min-w-0'>
+                            <Input {...field} id={`form-webhook-header-name-${index}`} aria-label='Header name' placeholder='Authorization' autoComplete='off' spellCheck={false} />
+                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                          </Field>
+                        )} />
+                      <Controller
+                        name={`headerTemplates.${index}.value`}
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                          <Field data-invalid={fieldState.invalid} className='min-w-0'>
+                            <Input {...field} id={`form-webhook-header-value-${index}`} aria-label='Value template' placeholder='Bearer your-token' autoComplete='off' spellCheck={false} className='font-mono text-xs' />
+                            {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                          </Field>
+                        )} />
+                      <Button type='button' variant='ghost' size='icon' aria-label={`Remove header ${index + 1}`} onClick={() => removeHeader(index)}>
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <FieldError errors={[form.formState.errors.headerTemplates?.root ?? form.formState.errors.headerTemplates]} />
+            </FieldSet>
           </FieldGroup>
           <FieldGroup className='min-w-0 md:border-l md:pl-6'>
             <Controller
@@ -295,8 +368,9 @@ function WebhookFormContent({
               </div>
               <Suspense fallback={<div className='flex min-h-32 items-center justify-center'><Spinner /></div>}>
                 <WebhookBodyPreview
-                  template={form.watch('bodyTemplate')}
+                  template={bodyTemplate}
                   event={previewEvent}
+                  headerTemplates={headerTemplates}
                 />
               </Suspense>
             </Field>

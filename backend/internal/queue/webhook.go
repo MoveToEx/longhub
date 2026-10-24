@@ -47,9 +47,10 @@ type DispatchArgs struct {
 type RequestBody = webhookpayload.Data
 
 type WorkerRequest struct {
-	URL             string `json:"url"`
-	Body            string `json:"body"`
-	ClientSignature string `json:"clientSignature"`
+	URL             string            `json:"url"`
+	Body            string            `json:"body"`
+	ClientSignature string            `json:"clientSignature"`
+	Headers         map[string]string `json:"headers,omitempty"`
 }
 
 type InvocationBody struct {
@@ -97,16 +98,39 @@ func webhookEventName(eventType int64) (string, error) {
 	}
 }
 
-func buildInvocationBody(eventType int64, data []byte, bodyTemplate string, initiator *webhookpayload.User, eventNames ...string) ([]byte, error) {
+func invocationEventName(eventType int64, eventNames ...string) (string, error) {
 	event, err := webhookEventName(eventType)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if len(eventNames) > 0 && eventNames[0] != "" && eventNames[0] != event {
 		if eventType != db.WebhookDeletionEvent || eventNames[0] != "restore" {
-			return nil, errors.New("invalid webhook event name for subscription")
+			return "", errors.New("invalid webhook event name for subscription")
 		}
 		event = "restore"
+	}
+	return event, nil
+}
+
+func buildInvocationHeaders(eventType int64, data []byte, templates map[string]string, initiator *webhookpayload.User, eventNames ...string) (map[string]string, error) {
+	event, err := invocationEventName(eventType, eventNames...)
+	if err != nil {
+		return nil, err
+	}
+	if len(templates) == 0 {
+		return nil, nil
+	}
+	var body RequestBody
+	if err := json.Unmarshal(data, &body); err != nil {
+		return nil, err
+	}
+	return webhookpayload.RenderHeaders(templates, event, body, initiator)
+}
+
+func buildInvocationBody(eventType int64, data []byte, bodyTemplate string, initiator *webhookpayload.User, eventNames ...string) ([]byte, error) {
+	event, err := invocationEventName(eventType, eventNames...)
+	if err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(bodyTemplate) != "" {
 		var body RequestBody
@@ -308,6 +332,10 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 		return nil
 	}
 	invocationBody, err := buildInvocationBody(args.EventType, bodyBytes, webhook.BodyTemplate.String, args.Initiator, args.Event)
+	var headers map[string]string
+	if err == nil {
+		headers, err = buildInvocationHeaders(args.EventType, bodyBytes, webhook.HeaderTemplates, args.Initiator, args.Event)
+	}
 	if err != nil {
 		recordErr := db.Query().RecordWebhookFailure(ctx, sqlc.RecordWebhookFailureParams{
 			ID:           args.WebhookID,
@@ -329,6 +357,7 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 		URL:             webhook.Endpoint,
 		Body:            string(invocationBody),
 		ClientSignature: signature,
+		Headers:         headers,
 	}
 
 	b, err := json.Marshal(body)
