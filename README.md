@@ -1,5 +1,11 @@
 # LONG Hub
 
+## Catalog replication
+
+Authenticated clients can download the current image catalog through
+`GET /sync/full`, then refresh individual images from webhook notifications.
+See [the replication protocol and integration example](docs/catalog-sync.md).
+
 ## Deploy
 
 Before deploying, a Cloudflare Worker is required to send outbound requests from Webhooks.

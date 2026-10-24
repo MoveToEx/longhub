@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { renderWebhookBodyPreview } from '../src/features/settings/lib/webhook-body-preview.ts';
 
 test('default preview preserves the envelope and includes changes only for update', () => {
-  for (const event of ['create', 'update', 'delete']) {
+  for (const event of ['create', 'update', 'delete', 'restore']) {
     const body = JSON.parse(renderWebhookBodyPreview('', event));
     assert.equal(body.event, event);
     assert.equal(body.data.imageID, 42);
@@ -17,7 +17,7 @@ test('default preview preserves the envelope and includes changes only for updat
 });
 
 test('owner and initiator identities are distinct, with Go fields and JSON keys', () => {
-  for (const event of ['create', 'update', 'delete']) {
+  for (const event of ['create', 'update', 'delete', 'restore']) {
     const expectedOwner = { id: 7, username: 'image-owner' };
     const expectedInitiator = event === 'create' ? expectedOwner : { id: 9, username: 'image-editor' };
     const defaultBody = JSON.parse(renderWebhookBodyPreview('', event));

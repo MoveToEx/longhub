@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,11 @@ type WebhookConfig struct {
 	Endpoint   string
 }
 
+type SyncConfig struct {
+	MaxConcurrent int
+	ExportTimeout time.Duration
+}
+
 type Config struct {
 	DatabaseURL    string
 	ValkeyAddr     string
@@ -58,6 +64,7 @@ type Config struct {
 	S3             S3Config
 	WebAuthn       WebAuthnConfig
 	Webhook        WebhookConfig
+	Sync           SyncConfig
 }
 
 var config Config
@@ -106,6 +113,10 @@ func Init() {
 		ValkeyAddr:     os.Getenv("VALKEY_ADDR"),
 		MeiliSearchURL: os.Getenv("MEILISEARCH_URL"),
 		MeiliSearchKey: os.Getenv("MEILISEARCH_KEY"),
+		Sync: SyncConfig{
+			MaxConcurrent: positiveIntEnv("SYNC_MAX_CONCURRENT", 2),
+			ExportTimeout: positiveDurationEnv("SYNC_EXPORT_TIMEOUT", 5*time.Minute),
+		},
 		JWT: JWTConfig{
 			PrivateKey: mustParsePrivateKey(os.Getenv("JWT_SECRET_KEY")),
 			Issuer:     os.Getenv("JWT_ISSUER"),
@@ -129,6 +140,30 @@ func Init() {
 			RPOrigins:     strings.Split(os.Getenv("WEBAUTHN_RP_ORIGINS"), ";"),
 		},
 	}
+}
+
+func positiveIntEnv(name string, fallback int) int {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		panic(name + " must be a positive integer")
+	}
+	return parsed
+}
+
+func positiveDurationEnv(name string, fallback time.Duration) time.Duration {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed <= 0 {
+		panic(name + " must be a positive duration, for example 5m")
+	}
+	return parsed
 }
 
 func InitClients() error {

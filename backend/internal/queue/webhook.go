@@ -59,6 +59,7 @@ type InvocationBody struct {
 }
 
 type InvokeArgs struct {
+	Event     string               `json:"event,omitempty"`
 	EventID   string               `json:"eventId,omitempty"`
 	WebhookID int64                `json:"webhookId"`
 	ImageID   int64                `json:"imageId"`
@@ -96,10 +97,16 @@ func webhookEventName(eventType int64) (string, error) {
 	}
 }
 
-func buildInvocationBody(eventType int64, data []byte, bodyTemplate string, initiator *webhookpayload.User) ([]byte, error) {
+func buildInvocationBody(eventType int64, data []byte, bodyTemplate string, initiator *webhookpayload.User, eventNames ...string) ([]byte, error) {
 	event, err := webhookEventName(eventType)
 	if err != nil {
 		return nil, err
+	}
+	if len(eventNames) > 0 && eventNames[0] != "" && eventNames[0] != event {
+		if eventType != db.WebhookDeletionEvent || eventNames[0] != "restore" {
+			return nil, errors.New("invalid webhook event name for subscription")
+		}
+		event = "restore"
 	}
 	if strings.TrimSpace(bodyTemplate) != "" {
 		var body RequestBody
@@ -165,19 +172,23 @@ func NewInvokeTask(id, imageID int64, version int32, eventType int64, body Reque
 	if len(eventIDs) > 0 {
 		eventID = eventIDs[0]
 	}
-	payloadBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	payload, err := json.Marshal(InvokeArgs{
+	return newInvokeTask(InvokeArgs{
 		EventID:   eventID,
 		WebhookID: id,
 		ImageID:   imageID,
 		Version:   version,
 		EventType: eventType,
-		Body:      payloadBody,
 		Initiator: initiator,
-	})
+	}, body)
+}
+
+func newInvokeTask(args InvokeArgs, body RequestBody) (*asynq.Task, error) {
+	payloadBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	args.Body = payloadBody
+	payload, err := json.Marshal(args)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +307,7 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 	if !webhook.Active {
 		return nil
 	}
-	invocationBody, err := buildInvocationBody(args.EventType, bodyBytes, webhook.BodyTemplate.String, args.Initiator)
+	invocationBody, err := buildInvocationBody(args.EventType, bodyBytes, webhook.BodyTemplate.String, args.Initiator, args.Event)
 	if err != nil {
 		recordErr := db.Query().RecordWebhookFailure(ctx, sqlc.RecordWebhookFailureParams{
 			ID:           args.WebhookID,

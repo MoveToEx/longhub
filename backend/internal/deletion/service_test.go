@@ -165,7 +165,7 @@ func TestLifecycleAndVisibility(t *testing.T) {
 	moderate("REVOKE", "approved")
 	moderate("REOPEN", "revoked")
 	var deletes, searches int
-	if err := pool.QueryRow(ctx, "SELECT count(*) FILTER(WHERE kind='delete'),count(*) FILTER(WHERE kind='search') FROM deletion_outbox").Scan(&deletes, &searches); err != nil || deletes != 2 || searches != 4 {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FILTER(WHERE kind='delete'),count(*) FILTER(WHERE kind='search') FROM deletion_outbox").Scan(&deletes, &searches); err != nil || deletes != 4 || searches != 4 {
 		t.Fatal(deletes, searches, err)
 	}
 	empty, err := service.Create(ctx, 2, 2, strings.Repeat("字", 2000))
@@ -226,7 +226,7 @@ func TestConcurrentDecisionsAndRollback(t *testing.T) {
 	run([]int64{winner, winner}, "REVOKE", "approved")
 	var events int
 	_ = pool.QueryRow(ctx, "SELECT count(*) FROM deletion_outbox WHERE kind='delete'").Scan(&events)
-	if events != 1 {
+	if events != 2 {
 		t.Fatal(events)
 	}
 	injected := errors.New("forced rollback")
@@ -246,7 +246,7 @@ func TestConcurrentDecisionsAndRollback(t *testing.T) {
 		t.Fatal("rollback inconsistent", row)
 	}
 	_ = pool.QueryRow(ctx, "SELECT count(*) FROM deletion_outbox WHERE kind='delete'").Scan(&events)
-	if events != 1 {
+	if events != 2 {
 		t.Fatal("rolled back event persisted")
 	}
 }

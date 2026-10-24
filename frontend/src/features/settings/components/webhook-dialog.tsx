@@ -37,7 +37,7 @@ import { formatError } from "@/shared/lib/utils";
 export const WEBHOOK_EVENTS = [
   { value: 1, label: 'Creation' },
   { value: 2, label: 'Update' },
-  { value: 4, label: 'Deletion' },
+  { value: 4, label: 'Deletion / restoration' },
 ] as const;
 
 const DEFAULT_BODY_TEMPLATE = '{\n  "event": {{json .Event}},\n  "data": {{json .Data}},\n  "initiator": {{json .Initiator}}\n}';
@@ -45,6 +45,7 @@ const PREVIEW_EVENTS = [
   { value: 'create', label: 'Creation' },
   { value: 'update', label: 'Update' },
   { value: 'delete', label: 'Deletion' },
+  { value: 'restore', label: 'Restoration' },
 ];
 const WebhookBodyEditor = lazy(() => import('@/features/settings/components/webhook-body-editor'));
 const WebhookBodyPreview = lazy(() => import('@/features/settings/components/webhook-body-preview'));

@@ -1,7 +1,7 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: ["sql/query.sql", "sql/deletion.sql"]
+    queries: ["sql/query.sql", "sql/deletion.sql", "sql/sync.sql"]
     schema: "sql/schema.sql"
     gen:
       go:

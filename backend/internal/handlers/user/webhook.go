@@ -241,6 +241,7 @@ func validateBodyTemplate(value pgtype.Text, eventTypes int64) error {
 		{db.WebhookCreationEvent, "create"},
 		{db.WebhookUpdateEvent, "update"},
 		{db.WebhookDeletionEvent, "delete"},
+		{db.WebhookDeletionEvent, "restore"},
 	} {
 		if eventTypes&event.flag == 0 && eventTypes != 0 {
 			continue

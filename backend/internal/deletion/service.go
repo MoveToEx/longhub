@@ -22,8 +22,10 @@ var (
 type Transaction func(context.Context, func(*sqlc.Queries) error) error
 type Service struct{ Transact Transaction }
 
-// Event is an immutable snapshot of one approval, independent of later restoration or edits.
+// Event is an immutable deletion or restoration snapshot. An omitted name is a
+// legacy deletion event already stored in the outbox.
 type Event struct {
+	Event     string        `json:"event,omitempty"`
 	Data      webhook.Data  `json:"data"`
 	Initiator *webhook.User `json:"initiator"`
 	Version   int32         `json:"version"`
@@ -113,6 +115,16 @@ func (s *Service) Moderate(ctx context.Context, requestID, actorID int64, action
 			if err := q.ApproveImageDeletion(ctx, sqlc.ApproveImageDeletionParams{ImageID: imageID, RequestID: requestID}); err != nil {
 				return err
 			}
+		} else if action == "REVOKE" {
+			if err := q.RevokeImageDeletion(ctx, imageID); err != nil {
+				return err
+			}
+		}
+		if next == sqlc.DeletionStatusApproved || action == "REVOKE" {
+			event := "delete"
+			if action == "REVOKE" {
+				event = "restore"
+			}
 			snapshot, err := q.GetImageSnapshot(ctx, imageID)
 			if err != nil {
 				return err
@@ -122,6 +134,7 @@ func (s *Service) Moderate(ctx context.Context, requestID, actorID int64, action
 				return err
 			}
 			payload, err := json.Marshal(Event{
+				Event: event,
 				Data: webhook.Data{ImageID: imageID, Text: snapshot.Text, Rating: sqlc.Rating(snapshot.Rating), Tags: snapshot.Tags,
 					ImageURL: snapshot.ImageUrl, CreatedAt: snapshot.CreatedAt.Time, Uploader: &webhook.User{ID: snapshot.UserID, Username: snapshot.Username}},
 				Initiator: &webhook.User{ID: actorID, Username: actor.Username}, Version: snapshot.Version,
@@ -132,12 +145,6 @@ func (s *Service) Moderate(ctx context.Context, requestID, actorID int64, action
 			if err := q.InsertDeletionOutbox(ctx, sqlc.InsertDeletionOutboxParams{ImageID: imageID, Kind: "delete", Payload: payload}); err != nil {
 				return err
 			}
-		} else if action == "REVOKE" {
-			if err := q.RevokeImageDeletion(ctx, imageID); err != nil {
-				return err
-			}
-		}
-		if next == sqlc.DeletionStatusApproved || action == "REVOKE" {
 			return q.InsertDeletionOutbox(ctx, sqlc.InsertDeletionOutboxParams{ImageID: imageID, Kind: "search", Payload: []byte(`{}`)})
 		}
 		return nil

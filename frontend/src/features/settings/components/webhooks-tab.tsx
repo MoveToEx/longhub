@@ -153,7 +153,7 @@ export default function WebhooksTab() {
               <EmptyMedia variant='icon'><WebhookIcon /></EmptyMedia>
               <EmptyTitle>No webhooks yet</EmptyTitle>
               <EmptyDescription>
-                Add an endpoint to receive image created, updated, and deleted events.
+                Add an endpoint to receive image created, updated, deleted, and restored events.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

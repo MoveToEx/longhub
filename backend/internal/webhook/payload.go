@@ -98,7 +98,7 @@ func (b *payloadBuffer) Write(data []byte) (int, error) {
 }
 
 func Render(bodyTemplate, event string, data Data, initiator *User) ([]byte, error) {
-	if event != "create" && event != "update" && event != "delete" {
+	if event != "create" && event != "update" && event != "delete" && event != "restore" {
 		return nil, errors.New("invalid webhook event")
 	}
 	if len(bodyTemplate) > MaxTemplateSize {

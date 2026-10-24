@@ -42,7 +42,7 @@ function previewData(event: string) {
 }
 
 export function renderWebhookBodyPreview(template: string, event: string): string {
-  if (!['create', 'update', 'delete'].includes(event)) throw new Error('Invalid webhook event.');
+  if (!['create', 'update', 'delete', 'restore'].includes(event)) throw new Error('Invalid webhook event.');
   if (encoder.encode(template).length > MAX_TEMPLATE_SIZE) throw new Error('Body template exceeds 64 KiB.');
 
   const data = previewData(event);

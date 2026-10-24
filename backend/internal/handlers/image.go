@@ -52,7 +52,17 @@ func GetImage(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	img, err := db.Query().GetImageDetails(ctx, id)
+	var img sqlc.GetImageDetailsRow
+	var tags []sqlc.Tag
+	err = db.ReadSnapshot(ctx, func(q *sqlc.Queries) error {
+		var err error
+		img, err = q.GetImageDetails(ctx, id)
+		if err != nil {
+			return err
+		}
+		tags, err = q.GetTagsByImage(ctx, img.ID)
+		return err
+	})
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -60,13 +70,6 @@ func GetImage(c *gin.Context) {
 		} else {
 			utils.ErrorResponse(c, 500, "Failed when getting image")
 		}
-		return
-	}
-
-	tags, err := db.Query().GetTagsByImage(ctx, img.ID)
-
-	if err != nil {
-		utils.ErrorResponse(c, 500, "Failed when getting tags")
 		return
 	}
 

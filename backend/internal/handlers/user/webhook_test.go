@@ -16,6 +16,13 @@ func TestEditWebhookPayloadPreservesOmittedActive(t *testing.T) {
 	}
 }
 
+func TestDeletionTemplateAlsoValidatesRestoration(t *testing.T) {
+	value := `{{if eq .Event "restore"}}invalid JSON{{else}}{}{{end}}`
+	if err := validateBodyTemplate(nullableBodyTemplate(&value), db.WebhookDeletionEvent); err == nil {
+		t.Fatal("deletion subscription did not validate restoration")
+	}
+}
+
 func TestEditWebhookBodyTemplateOmittedOrCleared(t *testing.T) {
 	for _, test := range []struct {
 		body    string

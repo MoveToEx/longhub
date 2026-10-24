@@ -2,6 +2,7 @@ package routes
 
 import (
 	"long/internal/admin"
+	"long/internal/config"
 	"long/internal/db"
 	"long/internal/deletion"
 	"long/internal/handlers"
@@ -38,6 +39,7 @@ func RegisterRoutes(r *gin.Engine) {
 	protected.Use(middleware.Auth(true))
 	{
 		protected.GET("/auth", handlers.GetIdentity)
+		protected.GET("/sync/full", handlers.NewFullSyncHandler(config.GetConfig().Sync))
 		protected.POST("/image/sign", handlers.CreateUploadSession)
 		protected.POST("/image/ack", handlers.AcknowledgeSession)
 		protected.PATCH("/image/:id", handlers.UpdateImage)

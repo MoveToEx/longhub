@@ -56,7 +56,10 @@ func dispatchDeletionOutbox(ctx context.Context, transact deletion.Transaction, 
 				for _, webhook := range webhooks {
 					eventID := fmt.Sprintf("deletion-%d", row.ID)
 					event.Data.DeletionEventID = eventID
-					task, err := NewInvokeTask(webhook.ID, row.ImageID, event.Version, db.WebhookDeletionEvent, event.Data, event.Initiator, eventID)
+					task, err := newInvokeTask(InvokeArgs{
+						Event: event.Event, EventID: eventID, WebhookID: webhook.ID, ImageID: row.ImageID,
+						Version: event.Version, EventType: db.WebhookDeletionEvent, Initiator: event.Initiator,
+					}, event.Data)
 					if err != nil {
 						return err
 					}

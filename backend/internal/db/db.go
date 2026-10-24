@@ -7,6 +7,7 @@ import (
 
 	"long/internal/sqlc"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
 )
@@ -35,7 +36,16 @@ func Query() *sqlc.Queries {
 }
 
 func Transaction(ctx context.Context, f func(qtx *sqlc.Queries) error) error {
-	tx, err := conn.Begin(ctx)
+	return transaction(ctx, pgx.TxOptions{}, f)
+}
+
+// ReadSnapshot keeps all reads, including paged exports, on one database snapshot.
+func ReadSnapshot(ctx context.Context, f func(qtx *sqlc.Queries) error) error {
+	return transaction(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, f)
+}
+
+func transaction(ctx context.Context, options pgx.TxOptions, f func(*sqlc.Queries) error) error {
+	tx, err := conn.BeginTx(ctx, options)
 
 	if err != nil {
 		return err

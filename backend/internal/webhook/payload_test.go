@@ -9,7 +9,7 @@ import (
 )
 
 func TestDefaultPayload(t *testing.T) {
-	for _, event := range []string{"create", "update", "delete"} {
+	for _, event := range []string{"create", "update", "delete", "restore"} {
 		t.Run(event, func(t *testing.T) {
 			data := PreviewData(event)
 			body, err := Render("", event, data, PreviewInitiator(event))

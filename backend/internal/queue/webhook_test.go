@@ -102,3 +102,32 @@ func TestInvokeTaskPreservesUserIdentities(t *testing.T) {
 		})
 	}
 }
+
+func TestRestorationInvocationAndLegacyDeletion(t *testing.T) {
+	data, err := json.Marshal(webhook.PreviewData("restore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, template := range []string{"", `{"event": {{json .Event}}, "data": {{json .Data}}}`} {
+		for _, event := range []string{"", "delete", "restore"} {
+			body, err := buildInvocationBody(db.WebhookDeletionEvent, data, template, nil, event)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var payload webhook.Payload
+			if err := json.Unmarshal(body, &payload); err != nil {
+				t.Fatal(err)
+			}
+			want := event
+			if want == "" {
+				want = "delete"
+			}
+			if payload.Event != want || payload.Data.ImageID != 42 {
+				t.Fatalf("unexpected lifecycle payload: %+v", payload)
+			}
+		}
+	}
+	if _, err := buildInvocationBody(db.WebhookUpdateEvent, data, "", nil, "restore"); err == nil {
+		t.Fatal("restoration escaped deletion subscription")
+	}
+}

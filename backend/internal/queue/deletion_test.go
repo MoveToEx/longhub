@@ -127,7 +127,7 @@ func TestOutboxRetriesAndDistinctApprovalSnapshots(t *testing.T) {
 	}
 	var pending int
 	_ = pool.QueryRow(ctx, "SELECT count(*) FROM deletion_outbox WHERE dispatched_at IS NULL").Scan(&pending)
-	if pending != 5 {
+	if pending != 6 {
 		t.Fatal(pending)
 	}
 	var mu sync.Mutex
@@ -159,6 +159,7 @@ func TestOutboxRetriesAndDistinctApprovalSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	events := map[string]bool{}
+	names := map[string]int{}
 	syncs := 0
 	for _, task := range tasks {
 		if task.Type() == TypeIndex {
@@ -176,9 +177,10 @@ func TestOutboxRetriesAndDistinctApprovalSnapshots(t *testing.T) {
 			t.Fatal(args, event)
 		}
 		events[args.EventID] = true
+		names[args.Event]++
 	}
-	if len(events) != 2 || syncs != 3 {
-		t.Fatal(len(events), syncs)
+	if len(events) != 3 || syncs != 3 || names["delete"] != 2 || names["restore"] != 1 {
+		t.Fatal(len(events), syncs, names)
 	}
 	_ = pool.QueryRow(ctx, "SELECT count(*) FROM deletion_outbox WHERE dispatched_at IS NULL").Scan(&pending)
 	if pending != 0 {
