@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { UserCog } from "lucide-react";
 import { isAxiosError } from "axios";
 import { useSWRConfig } from "swr";
 import { toast } from "sonner";
@@ -56,7 +57,7 @@ export default function UserManagementDialog({ user }: { user: AdminUser }) {
       }}
     >
       <DialogTrigger render={<Button variant="outline" size="sm" aria-label={`Manage ${user.username}`} disabled={protectedAccount} title={protectedAccount ? "Only Root users can manage Root accounts" : undefined} />}>
-        Manage
+        <UserCog aria-hidden="true" /> Manage
       </DialogTrigger>
       <ResponsiveDialogContent>
         <DialogHeader>
@@ -90,13 +91,12 @@ export default function UserManagementDialog({ user }: { user: AdminUser }) {
               setPassword("");
               setOpen(false);
               toast.success("User updated");
+              // Keep cached identity and rows so admin queries stay mounted during revalidation.
               await mutate(
                 (key) => Array.isArray(key)
                   ? key[0] === "admin" && key[2] === "users"
                   : Boolean(key && typeof key === "object" && "tags" in key &&
                     Array.isArray(key.tags) && key.tags.includes("user")),
-                undefined,
-                { revalidate: true },
               );
             } catch (e) {
               setError(formatError(e));
