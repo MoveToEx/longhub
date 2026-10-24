@@ -50,12 +50,12 @@ Downloads cannot resume. Discard incomplete staging data and start another expor
 IDs are JSON integers, as in the existing API; clients must preserve 64-bit values
 (for example, use a lossless JSON parser in JavaScript).
 
-The standard-library Python [download example](../examples/fetch_catalog.py)
+The standard-library Python [download example](./examples/)
 validates the stream and atomically replaces a local file only after success:
 
 ```sh
 export LONGHUB_APP_KEY='long-your-app-key'
-python examples/fetch_catalog.py https://api.example.com staging-images.ndjson
+python docs/examples/fetch_catalog.py https://api.example.com staging-images.ndjson
 ```
 
 Its output contains only image record lines. This example handles download and
@@ -161,5 +161,5 @@ delivery guarantee.
 
 Backend integration tests use isolated temporary databases created through
 `TEST_DATABASE_URL`. Run `go test ./...` from `backend`, frontend tests/build from
-`frontend`, and `python -m unittest discover -s examples -p 'test_*.py'` for the
+`frontend`, and `python -m unittest discover -s docs/examples -p 'test_*.py'` from the repository root for the
 download example.

@@ -1,7 +1,7 @@
 """Download and validate a full export using only the Python standard library.
 
 Set LONGHUB_APP_KEY, then run:
-    python examples/fetch_catalog.py https://api.example.com catalog.ndjson
+    python docs/examples/fetch_catalog.py https://api.example.com catalog.ndjson
 
 The output contains image records only. A webhook receiver must journal affected
 image IDs before this download starts; see docs/catalog-sync.md for the handoff.

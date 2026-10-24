@@ -1,0 +1,20 @@
+{
+  "name": "longhub-docs",
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev .",
+    "docs:build": "yarn docs:check && vitepress build .",
+    "docs:preview": "vitepress preview .",
+    "docs:spec": "node scripts/openapi.mjs",
+    "docs:check": "node scripts/openapi.mjs --check"
+  },
+  "packageManager": "yarn@4.11.0",
+  "devDependencies": {
+    "js-yaml": "4.1.0",
+    "vitepress": "^2.0.0-alpha.18",
+    "vue": "^3.5.40"
+  },
+  "dependencies": {
+    "vitepress-openapi": "^0.2.2"
+  }
+}

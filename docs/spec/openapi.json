@@ -1,0 +1,1728 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LONG Hub API",
+    "version": "0.0.1",
+    "description": "OpenAPI description of the image, catalog sync, search, tag, user-image, and favorite endpoints registered by the LONG Hub backend.\nSuccessful JSON responses use the envelope `{ \"error\": null, \"data\": ... }`; validation and server errors use `{ \"error\": \"...\" }`.\nEndpoints returning no data respond with HTTP 204 and an empty body.\nThe full catalog export is a streamed NDJSON response and does not use the JSON envelope.\nEndpoints not listed here are not intended for public use, but you can still invoke them anyway, you just need to experiment yourself.\n"
+  },
+  "servers": [
+    {
+      "url": "https://api.longhub.top",
+      "description": "Official backend server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Images"
+    },
+    {
+      "name": "Sync"
+    },
+    {
+      "name": "Search"
+    },
+    {
+      "name": "Upload"
+    },
+    {
+      "name": "Tags"
+    },
+    {
+      "name": "Users"
+    },
+    {
+      "name": "Favorites"
+    }
+  ],
+  "paths": {
+    "/sync/full": {
+      "get": {
+        "tags": [
+          "Sync"
+        ],
+        "operationId": "exportFullCatalog",
+        "summary": "Export the full image catalog",
+        "description": "Streams all active images with current metadata, tags, and public attribution from one\nconsistent database snapshot, in ascending image ID order. Image files and historical\nversions are excluded. Any authenticated session or app key may call this endpoint;\nno write permission is required. Accept-Encoding may request gzip compression.\n\nThe response starts with a manifest, followed by image records, and ends with an end\nrecord containing recordCount and a SHA-256 digest of the exact uncompressed image\nrecord lines (including LF bytes). Validate the end record and successful EOF before\naccepting the export. An interrupted stream can have HTTP status 200 but no end record.\nDownloads restart from the beginning. See the catalog sync guide for the record format\nand safe webhook handoff.\n",
+        "externalDocs": {
+          "description": "Catalog sync protocol and client example",
+          "url": "https://docs.longhub.top/catalog-sync"
+        },
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete NDJSON export; an empty catalog contains only manifest and end records.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              },
+              "Content-Encoding": {
+                "description": "Present with value gzip when gzip compression is negotiated.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "gzip"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"type\":\"manifest\",\"schemaVersion\":1,\"exportId\":\"example\",\"startedAt\":\"2026-10-24T00:00:00Z\"}\n{\"type\":\"end\",\"exportId\":\"example\",\"recordCount\":0,\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}\n"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "description": "The backend process has reached its concurrent export limit. Retry later.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "example": 5
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/image": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "listImages",
+        "summary": "List images",
+        "description": "Returns non-deleted images ordered by creation date descending. Pagination defaults to offset 0 and limit 24; the backend clamps limit to 24.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageListEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/image/{id}": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "getImage",
+        "summary": "Get an image",
+        "description": "Returns current metadata and tags from one database snapshot, including deletion details for soft-deleted images. A sync client should remove its local copy when deletion is non-null or currentVersionId is null.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ImageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image metadata and current tags",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "description": "Image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "updateImage",
+        "summary": "Edit metadata",
+        "description": "Requires an authenticated principal with the EditImage permission. Omitted fields retain their current values; supplying tags replaces the current tag set.",
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ImageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateImagePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Version created; empty response body"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/image/{id}/version": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "getImageVersions",
+        "summary": "List image versions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ImageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Versions ordered newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageVersionsEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/image/sign": {
+      "post": {
+        "tags": [
+          "Upload"
+        ],
+        "operationId": "createImageUploadSession",
+        "summary": "Presign PUT URL",
+        "description": "Requires an authenticated principal with the CreateImage permission. The returned URL is intended for an object-storage PUT using the requested MIME type.",
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/image/ack": {
+      "post": {
+        "tags": [
+          "Upload"
+        ],
+        "operationId": "acknowledgeImageUpload",
+        "summary": "Acknowledge upload",
+        "description": "Requires an authenticated principal with the CreateImage permission. The session must have been created by the same user.",
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcknowledgePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Newly created image identifier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AckEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/image/search": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "searchImages",
+        "summary": "Search images",
+        "description": "Uses Meilisearch. At most 50 conditions are accepted. Pagination defaults to offset 0 and limit 24; invalid order values fall back to upload date descending.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/image/quick-search": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "quickSearchImages",
+        "summary": "Quick search",
+        "description": "Returns up to 16 Meilisearch matches and, when authenticated, a separate list of matching favorites.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuickSearchPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quick-search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickSearchEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/user/{id}/image": {
+      "get": {
+        "tags": [
+          "Users",
+          "Images"
+        ],
+        "operationId": "listImagesByUser",
+        "summary": "List images by user",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User image page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserImageListEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/favorite": {
+      "get": {
+        "tags": [
+          "Favorites"
+        ],
+        "operationId": "listFavorites",
+        "summary": "List favorite images",
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Offset"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Favorite image page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteListEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Favorites"
+        ],
+        "operationId": "addFavorite",
+        "summary": "Favorite image",
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddFavoritePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Favorite added; empty response body"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/favorite/{id}": {
+      "get": {
+        "tags": [
+          "Favorites"
+        ],
+        "operationId": "getFavoriteState",
+        "summary": "Get favorite state",
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ImageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Favorite state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteStateEnvelope"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "The image is not favorited; empty response body"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Favorites"
+        ],
+        "operationId": "setFavoriteShortcut",
+        "summary": "Edit shortcut",
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ImageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetFavoriteShortcutPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Shortcut updated; empty response body"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Favorites"
+        ],
+        "operationId": "deleteFavorite",
+        "summary": "Un-favorite",
+        "security": [
+          {
+            "LongHubAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ImageId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Favorite removed; empty response body"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "LongHubAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Use `Session <JWT>` for a session token or `Key <app-key>` for an application key."
+      }
+    },
+    "parameters": {
+      "ImageId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        }
+      },
+      "UserId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 1
+        }
+      },
+      "Offset": {
+        "name": "offset",
+        "in": "query",
+        "description": "Number of rows to skip.",
+        "schema": {
+          "type": "integer",
+          "format": "int32",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Maximum number of rows. The backend caps this value at 24.",
+        "schema": {
+          "type": "integer",
+          "format": "int32",
+          "minimum": 1,
+          "maximum": 24,
+          "default": 24
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request or path/query parameter",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid authorization",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Authenticated user lacks the required image permission",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Wrapped": {
+        "type": "object",
+        "required": [
+          "error",
+          "data"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "description": "Always null in a successful response envelope."
+          },
+          "data": {}
+        }
+      },
+      "Rating": {
+        "type": "string",
+        "enum": [
+          "none",
+          "moderate",
+          "violent"
+        ]
+      },
+      "Timestamp": {
+        "type": "string",
+        "description": "RFC 3339 timestamp with a timezone offset, serialized from PostgreSQL timestamptz.",
+        "format": "date-time",
+        "nullable": true
+      },
+      "Tag": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "UserIdentifier": {
+        "type": "object",
+        "required": [
+          "id",
+          "createdAt",
+          "username"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "Image": {
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "rating",
+          "imageUrl",
+          "imageKey",
+          "createdAt",
+          "userIdentifier",
+          "currentVersionId",
+          "version",
+          "tags",
+          "deletion"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "imageKey": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "userIdentifier": {
+            "$ref": "#/components/schemas/UserIdentifier"
+          },
+          "currentVersionId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tag"
+            }
+          },
+          "deletion": {
+            "type": "object",
+            "nullable": true,
+            "description": "Null for active images; present for soft-deleted images.",
+            "required": [
+              "reason",
+              "deletedAt"
+            ],
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "deletedAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              }
+            }
+          }
+        }
+      },
+      "ImageListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "imageUrl",
+          "imageKey",
+          "userId",
+          "currentVersionId",
+          "text",
+          "rating"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "imageKey": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "currentVersionId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          }
+        }
+      },
+      "SearchImage": {
+        "type": "object",
+        "required": [
+          "text",
+          "rating",
+          "id",
+          "imageUrl",
+          "tags"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "required": [
+          "id",
+          "createdAt",
+          "imageId",
+          "version",
+          "text",
+          "rating",
+          "userId",
+          "userIdentifier",
+          "tags"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "imageId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "userIdentifier": {
+            "$ref": "#/components/schemas/UserIdentifier"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RandomImage": {
+        "type": "object",
+        "required": [
+          "id",
+          "imageUrl",
+          "imageKey",
+          "text",
+          "rating"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "imageKey": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          }
+        }
+      },
+      "UserImageItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "rating",
+          "imageUrl",
+          "imageKey",
+          "currentVersionId"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "imageKey": {
+            "type": "string"
+          },
+          "currentVersionId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "FavoriteState": {
+        "type": "object",
+        "required": [
+          "userId",
+          "imageId",
+          "shortcut",
+          "favoritedAt"
+        ],
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "imageId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shortcut": {
+            "type": "string",
+            "nullable": true
+          },
+          "favoritedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        }
+      },
+      "FavoriteImage": {
+        "type": "object",
+        "required": [
+          "shortcut",
+          "favoritedAt",
+          "userId",
+          "id",
+          "imageKey",
+          "imageUrl",
+          "text",
+          "rating",
+          "version"
+        ],
+        "properties": {
+          "shortcut": {
+            "type": "string",
+            "nullable": true
+          },
+          "favoritedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "imageKey": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RecommendedTag": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Tag"
+          },
+          {
+            "type": "object",
+            "required": [
+              "count"
+            ],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          }
+        ]
+      },
+      "ImageList": {
+        "type": "object",
+        "required": [
+          "total",
+          "images"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageListItem"
+            }
+          }
+        }
+      },
+      "UserImageList": {
+        "type": "object",
+        "required": [
+          "total",
+          "images"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserImageItem"
+            }
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "required": [
+          "total",
+          "images"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchImage"
+            }
+          }
+        }
+      },
+      "QuickSearchResult": {
+        "type": "object",
+        "required": [
+          "favorited",
+          "filtered"
+        ],
+        "properties": {
+          "favorited": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuickSearchImage"
+            }
+          },
+          "filtered": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuickSearchImage"
+            }
+          }
+        }
+      },
+      "QuickSearchImage": {
+        "type": "object",
+        "required": [
+          "id",
+          "imageUrl",
+          "text",
+          "rating"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          }
+        }
+      },
+      "SignPayload": {
+        "type": "object",
+        "required": [
+          "mime"
+        ],
+        "properties": {
+          "mime": {
+            "type": "string",
+            "description": "MIME type used as the object-storage Content-Type.",
+            "example": "image/png"
+          }
+        }
+      },
+      "SignResponse": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "key",
+          "url"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "key": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "AcknowledgePayload": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "text",
+          "rating",
+          "tags"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AckResponse": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "UpdateImagePayload": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SearchCondition": {
+        "type": "object",
+        "required": [
+          "type",
+          "value"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "tagInclude",
+              "tagExclude",
+              "ratingEq",
+              "textContains",
+              "uploadedBy"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "SearchPayload": {
+        "type": "object",
+        "required": [
+          "conditions",
+          "orderBy",
+          "order"
+        ],
+        "properties": {
+          "conditions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/SearchCondition"
+            }
+          },
+          "orderBy": {
+            "type": "string",
+            "enum": [
+              "id",
+              "uploadDate"
+            ],
+            "default": "uploadDate"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "default": "desc"
+          }
+        }
+      },
+      "QuickSearchPayload": {
+        "type": "object",
+        "required": [
+          "keywords"
+        ],
+        "properties": {
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AddFavoritePayload": {
+        "type": "object",
+        "required": [
+          "imageId"
+        ],
+        "properties": {
+          "imageId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shortcut": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "SetFavoriteShortcutPayload": {
+        "type": "object",
+        "properties": {
+          "shortcut": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TagAutocompleteResult": {
+        "type": "object",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tag"
+            }
+          }
+        }
+      },
+      "ImageListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ImageList"
+              }
+            }
+          }
+        ]
+      },
+      "ImageEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/Image"
+              }
+            }
+          }
+        ]
+      },
+      "ImageVersionsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SignEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SignResponse"
+              }
+            }
+          }
+        ]
+      },
+      "AckEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AckResponse"
+              }
+            }
+          }
+        ]
+      },
+      "SearchEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SearchResult"
+              }
+            }
+          }
+        ]
+      },
+      "QuickSearchEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/QuickSearchResult"
+              }
+            }
+          }
+        ]
+      },
+      "TagAutocompleteEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/TagAutocompleteResult"
+              }
+            }
+          }
+        ]
+      },
+      "RandomImagesEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RandomImage"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "UserImageListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/UserImageList"
+              }
+            }
+          }
+        ]
+      },
+      "RecommendedTagsEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RecommendedTag"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "FavoriteList": {
+        "type": "object",
+        "required": [
+          "total",
+          "images"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FavoriteImage"
+            }
+          }
+        }
+      },
+      "FavoriteListEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FavoriteList"
+              }
+            }
+          }
+        ]
+      },
+      "FavoriteStateEnvelope": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Wrapped"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FavoriteState"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

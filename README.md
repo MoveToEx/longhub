@@ -1,10 +1,26 @@
 # LONG Hub
 
+## Documentation
+
+The documentation site lives in [`docs/`](docs/README.md) and is published at
+[docs.longhub.top](https://docs.longhub.top). To work on it locally:
+
+```sh
+cd docs
+corepack enable
+yarn install --immutable
+yarn docs:dev
+```
+
+Pull requests validate the docs and examples. Documentation changes on `main`
+deploy through the GitHub Pages workflow.
+
 ## Catalog replication
 
 Authenticated clients can download the current image catalog through
 `GET /sync/full`, then refresh individual images from webhook notifications.
 See [the replication protocol and integration example](docs/catalog-sync.md).
+The [Python example](docs/examples/fetch_catalog.py) downloads and validates a full export.
 
 ## Deploy
 
