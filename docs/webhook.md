@@ -27,7 +27,7 @@ For a local replica, treat every notification as a request to refresh the image
 through `GET /image/:id`. The current response determines whether to upsert or
 remove it. Delayed events describe past actions and must not overwrite newer
 local state directly. See [catalog sync](/catalog-sync) and the
-[download example](/examples/) for bootstrap and recovery.
+[Python example](/catalog-sync#examples) for bootstrap and recovery.
 
 ## Schema
 

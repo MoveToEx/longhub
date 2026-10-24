@@ -17,8 +17,6 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'API', link: '/api/' },
-      { text: 'Catalog sync', link: '/catalog-sync' },
-      { text: 'Examples', link: '/examples/' }
     ],
 
     sidebar: [
@@ -51,10 +49,6 @@ export default defineConfig({
           {
             text: 'Catalog sync',
             link: '/catalog-sync'
-          },
-          {
-            text: 'Examples',
-            link: '/examples/'
           }
         ]
       }

@@ -3,75 +3,21 @@ info:
   title: LONG Hub API
   version: 0.0.1
   description: |
-    OpenAPI description of the image, catalog sync, search, tag, user-image, and favorite endpoints registered by the LONG Hub backend.
+    OpenAPI description of the image, search, tag, user-image, and favorite endpoints registered by the LONG Hub backend.
     Successful JSON responses use the envelope `{ "error": null, "data": ... }`; validation and server errors use `{ "error": "..." }`.
     Endpoints returning no data respond with HTTP 204 and an empty body.
-    The full catalog export is a streamed NDJSON response and does not use the JSON envelope.
     Endpoints not listed here are not intended for public use, but you can still invoke them anyway, you just need to experiment yourself.
 servers:
   - url: https://api.longhub.top
     description: Official backend server
 tags:
   - name: Images
-  - name: Sync
   - name: Search
   - name: Upload
   - name: Tags
   - name: Users
   - name: Favorites
 paths:
-  /sync/full:
-    get:
-      tags: [Sync]
-      operationId: exportFullCatalog
-      summary: Export the full image catalog
-      description: |
-        Streams all active images with current metadata, tags, and public attribution from one
-        consistent database snapshot, in ascending image ID order. Image files and historical
-        versions are excluded. Any authenticated session or app key may call this endpoint;
-        no write permission is required. Accept-Encoding may request gzip compression.
-
-        The response starts with a manifest, followed by image records, and ends with an end
-        record containing recordCount and a SHA-256 digest of the exact uncompressed image
-        record lines (including LF bytes). Validate the end record and successful EOF before
-        accepting the export. An interrupted stream can have HTTP status 200 but no end record.
-        Downloads restart from the beginning. See the catalog sync guide for the record format
-        and safe webhook handoff.
-      externalDocs:
-        description: Catalog sync protocol and client example
-        url: https://docs.longhub.top/catalog-sync
-      security:
-        - LongHubAuth: []
-      responses:
-        '200':
-          description: Complete NDJSON export; an empty catalog contains only manifest and end records.
-          headers:
-            Cache-Control:
-              schema: { type: string, enum: [no-store] }
-            Content-Encoding:
-              description: Present with value gzip when gzip compression is negotiated.
-              schema: { type: string, enum: [gzip] }
-          content:
-            application/x-ndjson:
-              schema:
-                type: string
-              example: |
-                {"type":"manifest","schemaVersion":1,"exportId":"example","startedAt":"2026-10-24T00:00:00Z"}
-                {"type":"end","exportId":"example","recordCount":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          description: The backend process has reached its concurrent export limit. Retry later.
-          headers:
-            Retry-After:
-              schema: { type: integer, example: 5 }
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
   /image:
     get:
       tags: [Images]
@@ -167,7 +113,11 @@ paths:
       tags: [Upload]
       operationId: createImageUploadSession
       summary: Presign PUT URL
-      description: Requires an authenticated principal with the CreateImage permission. The returned URL is intended for an object-storage PUT using the requested MIME type.
+      description: |
+        Requires an authenticated principal with the CreateImage permission. Provide the
+        file's MIME type and size in bytes. The maximum file size is 4 MiB (4,194,304 bytes).
+        The returned URL is intended for an object-storage PUT with the requested MIME type
+        as Content-Type and the exact requested size as Content-Length.
       security:
         - LongHubAuth: []
       requestBody:
@@ -176,6 +126,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SignPayload'
+            example:
+              mime: image/png
+              size: 1048576
       responses:
         '200':
           description: Upload session
@@ -657,12 +610,19 @@ components:
         rating: { $ref: '#/components/schemas/Rating' }
     SignPayload:
       type: object
-      required: [mime]
+      required: [mime, size]
       properties:
         mime:
           type: string
           description: MIME type used as the object-storage Content-Type.
           example: image/png
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 4194304
+          description: File size in bytes, used as the object-storage PUT Content-Length. Must match the uploaded file.
+          example: 1048576
     SignResponse:
       type: object
       required: [sessionId, key, url]

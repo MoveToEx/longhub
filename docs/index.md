@@ -16,9 +16,6 @@ hero:
     - theme: alt
       text: API
       link: /api
-    - theme: alt
-      text: Catalog sync
-      link: /catalog-sync
 
 features:
   - title: Metadata-based Search

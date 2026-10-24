@@ -13,10 +13,10 @@ Download the specification:
 
 Most read-only operations do not require authorization or authentication. You can directly invoke these endpoints. To use writing or account-related operations, see below.  
 
-The [full catalog export](/api/exportFullCatalog) requires authentication even
+The [full catalog export](/catalog-sync) requires authentication even
 though it is read-only. It accepts any valid app key or session and requires no
-write permission. See [catalog sync](/catalog-sync) for the streaming protocol and
-[examples](/examples/) for a download client.
+write permission. Its API details are documented on the catalog sync page;
+see the [Python example](/catalog-sync#examples) for a download client.
 
 Two types of authorization are supported, and either of them can be used to authenticate both on web and via API:
 
@@ -34,7 +34,9 @@ To authenticate, use the `Authorization` header with `Key` type:
 ```http
 POST https://api.longhub.top/image/sign
 Authorization: Key <YOUR_APP_KEY>
-...
+Content-Type: application/json
+
+{"mime":"image/png","size":1048576}
 ```
 
 ### Session
@@ -42,6 +44,9 @@ Authorization: Key <YOUR_APP_KEY>
 Use the session token returned by login with the `Session` authorization type:
 
 ```http
-GET https://api.longhub.top/sync/full
+POST https://api.longhub.top/image/sign
 Authorization: Session <SESSION_TOKEN>
+Content-Type: application/json
+
+{"mime":"image/png","size":1048576}
 ```

@@ -20,9 +20,9 @@ broken internal documentation links.
   it, run `yarn docs:spec` and commit the generated `spec/openapi.json` alongside
   the YAML. `yarn docs:check` detects stale JSON, unresolved local references, and
   duplicate operation IDs.
-- `examples/` contains the Python download example, its tests, and the examples
-  page. The site embeds the source directly and bundles a downloadable copy, so
-  there is only one maintained example implementation.
+- `examples/` contains the Python download example and its tests. The catalog sync
+  page embeds the source directly, so there is only one maintained example
+  implementation.
 - Run `python -m unittest discover -s examples -p 'test_*.py' -v` from this directory
   to test the example. Its download and tests use only the Python standard library.
 - `public/CNAME` preserves the custom domain and is copied into the built site.
