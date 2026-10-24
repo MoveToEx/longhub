@@ -38,8 +38,8 @@ export default function AdminLayout() {
         <h1 className="text-xl font-semibold">Admin access required</h1>
         <p className="text-muted-foreground">
           {data
-            ? "Your account does not have Admin permission."
-            : "Log in with an account that has Admin permission to open this panel."}
+            ? "Your account does not have Admin or Root permission."
+            : "Log in with an account that has Admin or Root permission to open this panel."}
         </p>
         <Link to="/" className="inline-block underline underline-offset-4">
           Return home

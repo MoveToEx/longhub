@@ -8,9 +8,10 @@ type Props = {
   mask: number,
   value: number,
   onValueChange: (val: number) => void,
+  disabled?: boolean,
 }
 
-export default function PermissionTransferList({ mask, value, onValueChange }: Props) {
+export default function PermissionTransferList({ mask, value, onValueChange, disabled = false }: Props) {
   const _toArray = (p: number) => {
     return Object.keys(Permission).map(Number).filter(bit => (p & bit) !== 0);
   }
@@ -20,18 +21,23 @@ export default function PermissionTransferList({ mask, value, onValueChange }: P
 
   const [left, setLeft] = useState([] as number[]);
   const [right, setRight] = useState([] as number[]);
+  const selectedAvailable = left.filter(bit => rest.includes(bit));
+  const selectedGranted = right.filter(bit => current.includes(bit));
 
   return (
-    <div className='h-48 flex flex-row gap-8'>
-      <div className='flex-1 flex flex-col items-center'>
+    <div className='h-48 flex flex-row gap-4 sm:gap-8'>
+      <div role='group' aria-label='Available permissions' className='min-w-0 flex-1 flex flex-col items-center'>
         <span className='text-md mb-2'>
           Permission
         </span>
         <ScrollArea className='flex-1 w-full h-32 border border-b-accent rounded-md p-1'>
           {rest.map(it => (
-            <div
+            <button
               key={it}
-              className={cn('hover:bg-accent px-2 py-0.5 rounded-sm', left.indexOf(it) === -1 ? '' : 'bg-accent')}
+              type='button'
+              disabled={disabled}
+              aria-pressed={selectedAvailable.includes(it)}
+              className={cn('w-full text-left hover:bg-accent px-2 py-0.5 rounded-sm disabled:opacity-50', selectedAvailable.includes(it) ? 'bg-accent' : '')}
               onClick={() => {
                 if (left.indexOf(it) === -1) {
                   setLeft(prev => [...prev, it]);
@@ -41,7 +47,7 @@ export default function PermissionTransferList({ mask, value, onValueChange }: P
                 }
               }}>
               {Permission[it]}
-            </div>
+            </button>
           ))}
           <ScrollBar />
         </ScrollArea>
@@ -49,19 +55,23 @@ export default function PermissionTransferList({ mask, value, onValueChange }: P
 
       <div className='h-full flex flex-col gap-2 justify-center'>
         <Button
+          type='button'
           variant='outline'
-          disabled={left.length === 0}
+          aria-label='Grant selected permissions'
+          disabled={disabled || selectedAvailable.length === 0}
           onClick={() => {
-            onValueChange(value | left.reduce((prev, cur) => prev | cur));
+            onValueChange(value | selectedAvailable.reduce((prev, cur) => prev | cur, 0));
             setLeft([]);
           }}>
           &gt;&gt;
         </Button>
         <Button
+          type='button'
           variant='outline'
-          disabled={right.length === 0}
+          aria-label='Revoke selected permissions'
+          disabled={disabled || selectedGranted.length === 0}
           onClick={() => {
-            onValueChange(value & ~right.reduce((prev, cur) => prev | cur));
+            onValueChange(value & ~selectedGranted.reduce((prev, cur) => prev | cur, 0));
             setRight([]);
           }}
         >
@@ -69,15 +79,18 @@ export default function PermissionTransferList({ mask, value, onValueChange }: P
         </Button>
       </div>
 
-      <div className='flex-1 flex flex-col items-center'>
+      <div role='group' aria-label='Granted permissions' className='min-w-0 flex-1 flex flex-col items-center'>
         <span className='text-md mb-2'>
           Granted
         </span>
         <ScrollArea className='flex-1 w-full h-32 border border-accent rounded-md p-1'>
           {current.map(it => (
-            <div
+            <button
               key={it}
-              className={cn('hover:bg-accent px-2 py-0.5 rounded-sm', right.indexOf(it) === -1 ? '' : 'bg-accent')}
+              type='button'
+              disabled={disabled}
+              aria-pressed={selectedGranted.includes(it)}
+              className={cn('w-full text-left hover:bg-accent px-2 py-0.5 rounded-sm disabled:opacity-50', selectedGranted.includes(it) ? 'bg-accent' : '')}
               onClick={() => {
                 if (right.indexOf(it) === -1) {
                   setRight(prev => [...prev, it]);
@@ -87,7 +100,7 @@ export default function PermissionTransferList({ mask, value, onValueChange }: P
                 }
               }}>
               {Permission[it]}
-            </div>
+            </button>
           ))}
           <ScrollBar />
         </ScrollArea>

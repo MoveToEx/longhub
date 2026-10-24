@@ -35,6 +35,15 @@ type DeletionRequest {
 type DeletionRequestPage { items: [DeletionRequest!]!, total: Int64! }
 type Mutation {
   moderateDeletionRequest(id: ID!, action: DeletionAction!, expectedStatus: DeletionStatus!): DeletionRequest!
+  updateUser(id: ID!, input: UpdateUserInput!): AdminUser!
+}
+
+input UpdateUserInput {
+  email: String!
+  "C, E, and D can be set. Root users can also set A. R is always preserved."
+  permission: Int64!
+  "Omit or leave empty to keep the current password."
+  password: String
 }
 
 input ImageQueryInput {

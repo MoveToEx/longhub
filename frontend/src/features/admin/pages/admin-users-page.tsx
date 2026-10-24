@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { formatPermissions } from '@/shared/lib/const';
 import AdminTable, { type AdminColumn } from '../components/admin-table';
+import UserManagementDialog from '../components/user-management-dialog';
 import { USER_QUERY, type AdminUser } from '../lib/types';
 
 const columns: AdminColumn<AdminUser>[] = [
@@ -36,6 +37,7 @@ const columns: AdminColumn<AdminUser>[] = [
   },
   { id: 'images', label: 'Active images', render: (row) => row.activeImageCount.toLocaleString() },
   { id: 'versions', label: 'Versions', render: (row) => row.versionCount.toLocaleString() },
+  { id: 'actions', label: 'Actions', render: (row) => <UserManagementDialog user={row} /> },
 ];
 
 export default function AdminUsersPage() {

@@ -20,6 +20,7 @@ window.matchMedia = vi.fn().mockImplementation((query) => ({
   dispatchEvent: vi.fn(),
 }));
 Element.prototype.scrollIntoView = vi.fn();
+Element.prototype.getAnimations = vi.fn(() => []);
 afterEach(() => {
   cleanup();
   localStorage.clear();

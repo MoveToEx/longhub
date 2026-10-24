@@ -91,6 +91,14 @@ type Mutation struct {
 type Query struct {
 }
 
+type UpdateUserInput struct {
+	Email string `json:"email"`
+	// C, E, and D can be set. Root users can also set A. R is always preserved.
+	Permission int64 `json:"permission"`
+	// Omit or leave empty to keep the current password.
+	Password *string `json:"password,omitempty"`
+}
+
 type UserPage struct {
 	Items []*AdminUser `json:"items"`
 	Total int64        `json:"total"`

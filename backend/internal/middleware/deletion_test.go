@@ -20,7 +20,7 @@ func TestDeletionRequiresCurrentDBit(t *testing.T) {
 	previous := config.GetConfig().JWT
 	config.GetConfig().JWT = config.JWTConfig{PrivateKey: key, Issuer: "test", Audience: "test", SessionTTL: 1}
 	t.Cleanup(func() { config.GetConfig().JWT = previous })
-	token, err := utils.NewToken(1, db.PermissionRequestDeletion)
+	token, err := utils.NewToken(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,18 +52,14 @@ func TestDeletionRequiresCurrentDBit(t *testing.T) {
 			}
 		})
 	}
-	// A newly granted D bit works with an older session claim.
-	old, err := utils.NewToken(1, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// The same session follows permission changes without issuing a new token.
 	store := &identityStore{permission: 4}
 	router := gin.New()
 	router.POST("/request", auth(true, store), requirePermission(store, 4, "D required"), func(c *gin.Context) { c.Status(204) })
 	for _, permission := range []int64{4, 0, 4} {
 		store.permission = permission
 		req := httptest.NewRequest("POST", "/request", nil)
-		req.Header.Set("Authorization", "Session "+old)
+		req.Header.Set("Authorization", "Session "+token)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		want := 204

@@ -20,6 +20,10 @@ type DeletionStore interface {
 	GetDeletionRequestRecord(context.Context, int64) (sqlc.DeletionRequestDetail, error)
 }
 
+type UserManagementStore interface {
+	AdminUpdateUser(context.Context, sqlc.AdminUpdateUserParams) (sqlc.AdminUpdateUserRow, error)
+}
+
 type Resolver struct {
 	Store     Store
 	Deletions *deletion.Service

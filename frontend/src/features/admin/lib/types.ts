@@ -60,6 +60,10 @@ export const USER_QUERY = `query AdminUsers($input: UserQueryInput) {
   }
 }`;
 
+export const UPDATE_USER = `mutation UpdateUser($id: ID!, $input: UpdateUserInput!) {
+  updateUser(id: $id, input: $input) { id email permission }
+}`;
+
 export type AdminDeletion = {
   id: string;
   imageId: string;

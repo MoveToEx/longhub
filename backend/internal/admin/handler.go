@@ -23,6 +23,7 @@ import (
 const maxRequestBytes = 1 << 20
 
 type actorContextKey struct{}
+type actorPermissionContextKey struct{}
 
 func NewHandler(store Store, services ...*deletion.Service) gin.HandlerFunc {
 	resolver := &Resolver{Store: store}
@@ -70,6 +71,7 @@ func NewHandler(store Store, services ...*deletion.Service) gin.HandlerFunc {
 		defer cancel()
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes)
 		ctx = context.WithValue(ctx, actorContextKey{}, c.GetInt64("UserID"))
+		ctx = context.WithValue(ctx, actorPermissionContextKey{}, c.GetInt64("Permission"))
 		server.ServeHTTP(c.Writer, c.Request.WithContext(ctx))
 	}
 }

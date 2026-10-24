@@ -445,6 +445,22 @@ SELECT COUNT(*) FROM public.user u
 WHERE @search::TEXT = '' OR u.id = @search_id::BIGINT
    OR u.username ILIKE @pattern::TEXT OR u.email ILIKE @pattern::TEXT;
 
+-- name: AdminUpdateUser :one
+WITH updated AS (
+  UPDATE public.user
+  SET email = @email::TEXT,
+      password_hash = COALESCE(sqlc.narg(password_hash)::BYTEA, password_hash),
+      permission = (permission & ~(@editable_permissions::BIGINT & 15::BIGINT))
+                 | (@permission::BIGINT & @editable_permissions::BIGINT & 15::BIGINT)
+  WHERE id = @id::BIGINT
+    AND (permission & 16::BIGINT = 0 OR @editable_permissions::BIGINT & 8::BIGINT != 0)
+  RETURNING id, username, email, permission, created_at
+)
+SELECT updated.*,
+       (SELECT COUNT(*) FROM image WHERE user_id = updated.id AND deleted_at IS NULL) AS active_image_count,
+       (SELECT COUNT(*) FROM version WHERE user_id = updated.id) AS version_count
+FROM updated;
+
 --#region Meilisearch indexing
 
 -- name: GetUnindexedVersion :one

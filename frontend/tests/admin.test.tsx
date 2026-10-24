@@ -11,8 +11,10 @@ import AppSidebar from '@/app/components/sidebar';
 import { SidebarProvider } from '@/shared/components/ui/sidebar';
 import {
   ADMIN_PERMISSION,
+  ROOT_PERMISSION,
   formatPermissions,
   hasAdminPermission,
+  hasRootPermission,
   Permission,
 } from '@/shared/lib/const';
 import type { Identity } from '@/shared/lib/types';
@@ -97,12 +99,16 @@ beforeEach(() => {
 });
 
 describe('admin access', () => {
-  it('uses the existing Admin bit exclusively and labels every defined permission', () => {
+  it('accepts Admin or Root for admin access and labels every defined permission', () => {
     expect(hasAdminPermission(128)).toBe(false);
     expect(hasAdminPermission(8)).toBe(true);
     expect(hasAdminPermission(15)).toBe(true);
+    expect(hasAdminPermission(ROOT_PERMISSION)).toBe(true);
     expect(hasAdminPermission(undefined)).toBe(false);
-    expect(Object.keys(Permission)).toHaveLength(4);
+    expect(hasRootPermission(ADMIN_PERMISSION)).toBe(false);
+    expect(hasRootPermission(ROOT_PERMISSION)).toBe(true);
+    expect(hasRootPermission(undefined)).toBe(false);
+    expect(Object.keys(Permission)).toHaveLength(5);
   });
 
   it.each([null, 3, 128])(
@@ -133,6 +139,13 @@ describe('admin access', () => {
     expect(screen.getByRole('link', { name: 'Admin' })).toBeTruthy();
     expect(await screen.findByText('image text')).toBeTruthy();
     expect(mocks.post.mock.calls[0][1].variables.input.status).toBe('ACTIVE');
+  });
+
+  it('allows Root users to open the user administration page without A', async () => {
+    signIn(ROOT_PERMISSION);
+    mount('/admin/users', true);
+    expect(screen.getByRole('link', { name: 'Admin' })).toBeTruthy();
+    expect(await screen.findByText('table-user')).toBeTruthy();
   });
 
   it('removes cached rows and the entrance after logout', async () => {
@@ -176,14 +189,17 @@ describe('admin access', () => {
 });
 
 it.each([
-  [0, '----'],
-  [1, '---C'],
-  [2, '--E-'],
-  [3, '--EC'],
-  [4, '-D--'],
-  [8, 'A---'],
-  [15, 'ADEC'],
-  [128, '----'],
+  [0, '-----'],
+  [1, '----C'],
+  [2, '---E-'],
+  [3, '---EC'],
+  [4, '--D--'],
+  [8, '-A---'],
+  [15, '-ADEC'],
+  [16, 'R----'],
+  [24, 'RA---'],
+  [31, 'RADEC'],
+  [128, '-----'],
 ])('formats permission %s as %s', (permission, expected) => {
   expect(formatPermissions(permission)).toBe(expected);
 });

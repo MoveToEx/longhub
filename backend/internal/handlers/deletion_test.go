@@ -32,11 +32,11 @@ func TestDeletionHTTPAndVisibility(t *testing.T) {
 	prior := config.GetConfig().JWT
 	config.GetConfig().JWT = config.JWTConfig{PrivateKey: private, Issuer: "test", Audience: "test", SessionTTL: 1}
 	t.Cleanup(func() { config.GetConfig().JWT = prior })
-	token, err := utils.NewToken(2, 4)
+	token, err := utils.NewToken(2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin, err := utils.NewToken(1, 8)
+	admin, err := utils.NewToken(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,12 +112,7 @@ func TestDeletionHTTPAndVisibility(t *testing.T) {
 	if _, err := pool.Exec(ctx, "UPDATE public.user SET permission=6 WHERE id=2"); err != nil {
 		t.Fatal(err)
 	}
-	call("PATCH", "/image/1", `{"text":"edit","tags":[],"rating":"none"}`, "Session "+token, 403) // old session has no Edit
-	editor, err := utils.NewToken(2, 6)
-	if err != nil {
-		t.Fatal(err)
-	}
-	call("PATCH", "/image/1", `{"text":"edit","tags":[],"rating":"none"}`, "Session "+editor, 404)
+	call("PATCH", "/image/1", `{"text":"edit","tags":[],"rating":"none"}`, "Session "+token, 404) // current Edit permission also applies to older sessions
 	call("POST", "/favorite", `{"imageId":1}`, "Session "+admin, 404)
 	call("POST", "/image/1/deletion", `{"reason":"already deleted"}`, "Session "+token, 409)
 	for _, path := range []string{"/image", "/user/2/image", "/favorite"} {

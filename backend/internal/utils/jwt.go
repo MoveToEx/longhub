@@ -9,22 +9,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type Claims struct {
-	Permission int64
-
-	jwt.RegisteredClaims
-}
-
-func NewToken(userId int64, permission int64) (string, error) {
-	payload := Claims{
-		Permission: permission,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   strconv.FormatInt(userId, 10),
-			Issuer:    config.GetConfig().JWT.Issuer,
-			Audience:  []string{config.GetConfig().JWT.Audience},
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(config.GetConfig().JWT.SessionTTL) * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
+func NewToken(userID int64) (string, error) {
+	now := time.Now()
+	payload := jwt.RegisteredClaims{
+		Subject:   strconv.FormatInt(userID, 10),
+		Issuer:    config.GetConfig().JWT.Issuer,
+		Audience:  []string{config.GetConfig().JWT.Audience},
+		ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(config.GetConfig().JWT.SessionTTL) * time.Hour)),
+		IssuedAt:  jwt.NewNumericDate(now),
 	}
 
 	t := jwt.NewWithClaims(jwt.SigningMethodEdDSA, payload)
@@ -32,8 +24,8 @@ func NewToken(userId int64, permission int64) (string, error) {
 	return t.SignedString(config.GetConfig().JWT.PrivateKey)
 }
 
-func ParseToken(s string) (*Claims, error) {
-	claims := &Claims{}
+func ParseToken(s string) (*jwt.RegisteredClaims, error) {
+	claims := &jwt.RegisteredClaims{}
 
 	token, err := jwt.ParseWithClaims(
 		s,

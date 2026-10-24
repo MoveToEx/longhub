@@ -16,7 +16,7 @@ type adminQueries interface {
 	GetUser(context.Context, int64) (sqlc.User, error)
 }
 
-// RequireAdmin follows Auth and deliberately ignores stale session permission claims.
+// RequireAdmin follows Auth and accepts current Admin or Root permission.
 func RequireAdmin() gin.HandlerFunc {
 	return requireAdmin(db.Query())
 }
@@ -52,11 +52,16 @@ func requirePermission(queries adminQueries, required int64, message string) gin
 		if c.GetString("AuthorizedVia") == "AppKey" {
 			permission &= c.GetInt64("Permission")
 		}
-		if permission&required != required {
+		allowed := permission&required == required
+		if required == db.PermissionAdmin && permission&db.PermissionRoot != 0 {
+			allowed = true
+		}
+		if !allowed {
 			utils.ErrorResponse(c, http.StatusForbidden, "%s", message)
 			c.Abort()
 			return
 		}
+		c.Set("Permission", permission)
 		c.Next()
 	}
 }

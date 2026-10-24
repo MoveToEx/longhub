@@ -11,4 +11,5 @@ const (
 	PermissionEdit
 	PermissionRequestDeletion
 	PermissionAdmin
+	PermissionRoot
 )

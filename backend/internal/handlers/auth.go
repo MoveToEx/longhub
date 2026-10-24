@@ -54,7 +54,7 @@ func LoginRoute(c *gin.Context) {
 		return
 	}
 
-	token, err := utils.NewToken(user.ID, user.Permission)
+	token, err := utils.NewToken(user.ID)
 
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when generating token")
@@ -164,7 +164,7 @@ func ValidateWebAuthnLogin(c *gin.Context) {
 		return
 	}
 
-	token, err := utils.NewToken(resolved.ID, resolved.Permission)
+	token, err := utils.NewToken(resolved.ID)
 
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Failed when generating token")

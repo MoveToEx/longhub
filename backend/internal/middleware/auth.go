@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"long/internal/db"
 	"long/internal/sqlc"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 func fail(c *gin.Context, status int, msg string, strict bool) {
@@ -22,6 +24,7 @@ func fail(c *gin.Context, status int, msg string, strict bool) {
 }
 
 type authQueries interface {
+	GetUser(context.Context, int64) (sqlc.User, error)
 	GetUserByAppKey(context.Context, string) (sqlc.GetUserByAppKeyRow, error)
 	UpdateAppKeyUsedDate(context.Context, int64) error
 }
@@ -57,13 +60,23 @@ func auth(strict bool, queries authQueries) gin.HandlerFunc {
 
 			sub, err := strconv.ParseInt(claims.Subject, 10, 64)
 
-			if err != nil {
+			if err != nil || sub <= 0 {
 				fail(c, 401, "Malformed sub", strict)
 				return
 			}
 
+			user, err := queries.GetUser(c.Request.Context(), sub)
+			if err != nil {
+				status, message := 500, "Unable to check authentication"
+				if errors.Is(err, pgx.ErrNoRows) {
+					status, message = 401, "Invalid authentication"
+				}
+				fail(c, status, message, strict)
+				return
+			}
+
 			c.Set("UserID", sub)
-			c.Set("Permission", claims.Permission)
+			c.Set("Permission", user.Permission)
 			c.Set("AuthorizedVia", "Session")
 
 			c.Next()
@@ -83,7 +96,7 @@ func auth(strict bool, queries authQueries) gin.HandlerFunc {
 			}()
 
 			c.Set("UserID", user.ID)
-			c.Set("Permission", user.KeyPermission)
+			c.Set("Permission", user.KeyPermission&user.Permission)
 			c.Set("AuthorizedVia", "AppKey")
 
 			c.Next()

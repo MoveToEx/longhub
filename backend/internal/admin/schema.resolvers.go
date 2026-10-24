@@ -17,6 +17,11 @@ func (r *mutationResolver) ModerateDeletionRequest(ctx context.Context, id strin
 	return r.moderateDeletion(ctx, id, action, expectedStatus)
 }
 
+// UpdateUser is the resolver for the updateUser field.
+func (r *mutationResolver) UpdateUser(ctx context.Context, id string, input model.UpdateUserInput) (*model.AdminUser, error) {
+	return r.updateUser(ctx, id, input)
+}
+
 // Images is the resolver for the images field.
 func (r *queryResolver) Images(ctx context.Context, input *model.ImageQueryInput) (*model.ImagePage, error) {
 	if input == nil {

@@ -43,11 +43,7 @@ func TestAdminAuthentication(t *testing.T) {
 	previous := config.GetConfig().JWT
 	config.GetConfig().JWT = config.JWTConfig{PrivateKey: private, Issuer: "test", Audience: "test", SessionTTL: 1}
 	t.Cleanup(func() { config.GetConfig().JWT = previous })
-	token, err := utils.NewToken(1, db.PermissionAdmin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldToken, err := utils.NewToken(1, 0)
+	token, err := utils.NewToken(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,10 +61,15 @@ func TestAdminAuthentication(t *testing.T) {
 		{name: "ordinary user", auth: "Session " + token, permission: db.PermissionCreate | db.PermissionEdit, status: 403},
 		{name: "unknown permission grants no admin access", auth: "Session " + token, permission: 1 << 7, status: 403},
 		{name: "admin session", auth: "Session " + token, permission: db.PermissionAdmin, status: 204},
+		{name: "root session", auth: "Session " + token, permission: db.PermissionRoot, status: 204},
+		{name: "root and admin session", auth: "Session " + token, permission: db.PermissionRoot | db.PermissionAdmin, status: 204},
 		{name: "revoked session", auth: "Session " + token, permission: 0, status: 403},
-		{name: "newly granted session", auth: "Session " + oldToken, permission: db.PermissionAdmin, status: 204},
+		{name: "newly granted session", auth: "Session " + token, permission: db.PermissionAdmin, status: 204},
 		{name: "deleted account", auth: "Session " + token, userError: pgx.ErrNoRows, status: 401},
 		{name: "admin key", auth: "Key valid-key", permission: db.PermissionAdmin, keyPermission: db.PermissionAdmin, status: 204},
+		{name: "root key", auth: "Key valid-key", permission: db.PermissionRoot, keyPermission: db.PermissionRoot, status: 204},
+		{name: "root owner key lacks admin scope", auth: "Key valid-key", permission: db.PermissionRoot, keyPermission: db.PermissionAdmin, status: 403},
+		{name: "admin owner key lacks root", auth: "Key valid-key", permission: db.PermissionAdmin, keyPermission: db.PermissionRoot, status: 403},
 		{name: "key lacks permission", auth: "Key valid-key", permission: db.PermissionAdmin, status: 403},
 		{name: "owner permission revoked", auth: "Key valid-key", permission: 0, keyPermission: db.PermissionAdmin, status: 403},
 		{name: "database failure", auth: "Session " + token, userError: errors.New("private database details"), status: 500},
@@ -91,11 +92,54 @@ func TestAdminAuthentication(t *testing.T) {
 	}
 }
 
+func TestAuthenticationUsesCurrentPermissions(t *testing.T) {
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := config.GetConfig().JWT
+	config.GetConfig().JWT = config.JWTConfig{PrivateKey: private, Issuer: "test", Audience: "test", SessionTTL: 1}
+	t.Cleanup(func() { config.GetConfig().JWT = previous })
+	token, err := utils.NewToken(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, authorization       string
+		permission, keyPermission int64
+		expected                  int64
+	}{
+		{"revoked session permissions", "Session " + token, 0, 0, 0},
+		{"new session permissions", "Session " + token, 4, 0, 4},
+		{"revoked key owner permissions", "Key valid-key", 0, 7, 0},
+		{"key owner intersection", "Key valid-key", 4, 7, 4},
+		{"key scope remains limited", "Key valid-key", 7, 1, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &identityStore{permission: tc.permission, keyPermission: tc.keyPermission}
+			router := gin.New()
+			router.GET("/protected", auth(true, store), func(c *gin.Context) {
+				if permission := c.GetInt64("Permission"); permission != tc.expected {
+					t.Errorf("effective permission %d, want %d", permission, tc.expected)
+				}
+				c.Status(204)
+			})
+			req := httptest.NewRequest("GET", "/protected", nil)
+			req.Header.Set("Authorization", tc.authorization)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, req)
+			if response.Code != 204 {
+				t.Fatal(response.Body.String())
+			}
+		})
+	}
+}
+
 func TestAdminRechecksPermissionOnEveryRequest(t *testing.T) {
 	store := &identityStore{permission: db.PermissionAdmin}
 	router := gin.New()
 	router.POST("/admin/graphql", func(c *gin.Context) { c.Set("UserID", int64(1)); c.Set("AuthorizedVia", "Session") }, requireAdmin(store), func(c *gin.Context) { c.Status(204) })
-	for _, permission := range []int64{db.PermissionAdmin, 0, db.PermissionAdmin} {
+	for _, permission := range []int64{db.PermissionAdmin, db.PermissionRoot, 0, db.PermissionRoot} {
 		store.permission = permission
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, httptest.NewRequest("POST", "/admin/graphql", nil))

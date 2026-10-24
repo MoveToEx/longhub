@@ -272,6 +272,62 @@ func (q *Queries) AdminListUsers(ctx context.Context, arg AdminListUsersParams) 
 	return items, nil
 }
 
+const adminUpdateUser = `-- name: AdminUpdateUser :one
+WITH updated AS (
+  UPDATE public.user
+  SET email = $1::TEXT,
+      password_hash = COALESCE($2::BYTEA, password_hash),
+      permission = (permission & ~($3::BIGINT & 15::BIGINT))
+                 | ($4::BIGINT & $3::BIGINT & 15::BIGINT)
+  WHERE id = $5::BIGINT
+    AND (permission & 16::BIGINT = 0 OR $3::BIGINT & 8::BIGINT != 0)
+  RETURNING id, username, email, permission, created_at
+)
+SELECT updated.id, updated.username, updated.email, updated.permission, updated.created_at,
+       (SELECT COUNT(*) FROM image WHERE user_id = updated.id AND deleted_at IS NULL) AS active_image_count,
+       (SELECT COUNT(*) FROM version WHERE user_id = updated.id) AS version_count
+FROM updated
+`
+
+type AdminUpdateUserParams struct {
+	Email               string `json:"email"`
+	PasswordHash        []byte `json:"passwordHash"`
+	EditablePermissions int64  `json:"editablePermissions"`
+	Permission          int64  `json:"permission"`
+	ID                  int64  `json:"id"`
+}
+
+type AdminUpdateUserRow struct {
+	ID               int64              `json:"id"`
+	Username         string             `json:"username"`
+	Email            string             `json:"email"`
+	Permission       int64              `json:"permission"`
+	CreatedAt        pgtype.Timestamptz `json:"createdAt"`
+	ActiveImageCount int64              `json:"activeImageCount"`
+	VersionCount     int64              `json:"versionCount"`
+}
+
+func (q *Queries) AdminUpdateUser(ctx context.Context, arg AdminUpdateUserParams) (AdminUpdateUserRow, error) {
+	row := q.db.QueryRow(ctx, adminUpdateUser,
+		arg.Email,
+		arg.PasswordHash,
+		arg.EditablePermissions,
+		arg.Permission,
+		arg.ID,
+	)
+	var i AdminUpdateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.Permission,
+		&i.CreatedAt,
+		&i.ActiveImageCount,
+		&i.VersionCount,
+	)
+	return i, err
+}
+
 const commitUnindexedVersion = `-- name: CommitUnindexedVersion :exec
 UPDATE image
 SET indexed_version = $1
