@@ -111,11 +111,11 @@ describe("webhook gateway", () => {
 		expect(await response.json()).toEqual({ error: "Invalid server signature" });
 	});
 
-	it("rejects malformed authenticated invocations", async () => {
+	it("rejects non-HTTP webhook URLs", async () => {
 		const request = await signedRequest({
 			url: "file:///etc/passwd",
 			body: "{}",
-			clientSignature: "not-hex",
+			clientSignature: "a1".repeat(32),
 		});
 
 		const response = await invoke(request);
@@ -125,6 +125,29 @@ describe("webhook gateway", () => {
 			error: "Webhook URL must use HTTP or HTTPS",
 		});
 	});
+
+	it("rejects invalid client signatures for otherwise valid invocations", async () => {
+		const request = await signedRequest({
+			url: "https://client.example/hooks/longhub",
+			body: "{}",
+			clientSignature: "not-hex",
+		});
+		const response = await invoke(request);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "Client signature must be a hex string",
+		});
+	});
+
+	it.each([null, {}, { url: "https://client.example", body: "{}" }])(
+		"rejects authenticated invocations with missing fields: %j",
+		async (invocation) => {
+			const response = await invoke(await signedRequest(invocation));
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({ error: "Invalid webhook invocation" });
+		},
+	);
 
 	it("rejects webhooks targeting private, loopback, or local hosts", async () => {
 		const blocked = [

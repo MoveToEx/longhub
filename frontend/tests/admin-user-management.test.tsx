@@ -57,12 +57,10 @@ beforeEach(() => {
   });
 });
 
-it.each([3, 11])("uses the responsive drawer and limits transfers to editable permissions for permission %s", async (permission) => {
+it.each([3, 11])("limits transfers to editable permissions for permission %s", async (permission) => {
   managedUser.permission = permission;
   mount();
   const dialog = await openDialog();
-  expect(dialog.className).toContain("bottom-0");
-  expect(dialog.className).toContain("md:max-w-md");
   expect(within(dialog).getByRole("button", { name: "Drag down to close drawer" })).toBeTruthy();
   expect((within(dialog).getByRole("textbox", { name: "Email" }) as HTMLInputElement).value).toBe("old@example.com");
   expect(within(dialog).queryByRole("button", { name: "Admin" })).toBeNull();

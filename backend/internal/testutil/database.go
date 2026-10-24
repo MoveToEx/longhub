@@ -14,7 +14,8 @@ import (
 	"time"
 )
 
-func Database(t *testing.T) (*pgxpool.Pool, db.TransactionFunc) {
+// EmptyDatabase creates an isolated database without applying migrations.
+func EmptyDatabase(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -25,7 +26,7 @@ func Database(t *testing.T) (*pgxpool.Pool, db.TransactionFunc) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := fmt.Sprintf("longhub_deletion_test_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("longhub_test_%d", time.Now().UnixNano())
 	quoted := pgx.Identifier{name}.Sanitize()
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+quoted); err != nil {
 		t.Fatal(err)
@@ -47,6 +48,13 @@ func Database(t *testing.T) (*pgxpool.Pool, db.TransactionFunc) {
 		}
 		_ = admin.Close(ctx)
 	})
+	return pool
+}
+
+func Database(t *testing.T) (*pgxpool.Pool, db.TransactionFunc) {
+	t.Helper()
+	pool := EmptyDatabase(t)
+	ctx := context.Background()
 	sqlDB := stdlib.OpenDBFromPool(pool)
 	defer sqlDB.Close()
 	if err := db.Migrate(ctx, sqlDB); err != nil {

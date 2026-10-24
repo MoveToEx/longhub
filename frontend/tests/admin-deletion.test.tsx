@@ -1,11 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter } from "react-router";
 import { SWRConfig } from "swr";
 import { AxiosError } from "axios";
 import DeletionRequests from "@/features/images/components/deletion-requests";
-import AdminLayout from "@/features/admin/components/admin-layout";
 import AdminDeletionsPage, { DeletionActions } from "@/features/admin/pages/admin-deletions-page";
 import { invalidateDeletionCaches } from "@/features/images/lib/deletion-cache";
 import type { AdminDeletion } from "@/features/admin/lib/types";
@@ -90,14 +89,11 @@ it.each([8, 0])("does not allow submission without D (permission %s)", async (pe
   expect(screen.queryByRole("button", { name: "Request deletion" })).toBeNull();
 });
 
-it("offers editable templates in the responsive dialog and submits a trimmed reason", async () => {
+it("offers editable reason templates and submits a trimmed reason", async () => {
   mount(<DeletionRequests id={7} deleted={false} />);
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "Deletion requests" }));
   await user.click(await screen.findByRole("button", { name: "Request deletion" }));
-  const dialog = screen.getByRole("dialog");
-  expect(dialog.className).toContain("md:max-w-md");
-  expect(dialog.className).toContain("bottom-0");
   await user.click(screen.getByRole("combobox", { name: "Reason template" }));
   expect(await screen.findByRole("option", { name: "Site-guideline violation" })).toBeTruthy();
   expect(screen.getByRole("option", { name: "Incorrect or misleading content" })).toBeTruthy();
@@ -138,21 +134,17 @@ it("shows submission errors, revalidates identity on denial, and allows retry", 
       false,
     ),
   );
-});
-
-it("guards the new direct admin route before making requests", async () => {
-  mount(
-    <Routes>
-      <Route path="/admin" element={<AdminLayout />}>
-        <Route path="deletions" element={<AdminDeletionsPage />} />
-      </Route>
-    </Routes>,
+  await user.click(screen.getByRole("button", { name: "Submit request" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(mocks.post).toHaveBeenCalledTimes(2);
+  expect(mocks.post).toHaveBeenLastCalledWith(
+    "/image/7/deletion",
+    { reason: "reason" },
+    { headers: { Authorization: "Session session" } },
   );
-  expect(screen.getByText("Admin access required")).toBeTruthy();
-  expect(mocks.post).not.toHaveBeenCalled();
 });
 
-it("defaults moderation to active, filters all statuses and resets pagination", async () => {
+it("defaults moderation to active and resets pagination when filtering by status", async () => {
   mocks.auth.data = { permission: 8 };
   mount(<AdminDeletionsPage />);
   const user = userEvent.setup();

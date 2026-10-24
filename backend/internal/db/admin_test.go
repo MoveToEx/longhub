@@ -1,8 +1,9 @@
-package db
+package db_test
 
 import (
 	"context"
 	"long/internal/sqlc"
+	"long/internal/testutil"
 	"reflect"
 	"strconv"
 	"strings"
@@ -13,10 +14,7 @@ import (
 func TestAdminSQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	pool, sqlDB := timestampTestDatabase(t, ctx, "UTC")
-	if err := Migrate(ctx, sqlDB); err != nil {
-		t.Fatal(err)
-	}
+	pool, _ := testutil.Database(t)
 	_, err := pool.Exec(ctx, `
 INSERT INTO public.user (username, email, permission, created_at) VALUES
  ('admin', 'admin@example.com', 8, '2026-10-23T00:00:00Z'),

@@ -1,10 +1,12 @@
-package db
+package db_test
 
 import (
 	"context"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
-	"io/fs"
 	"long/internal/sqlc"
+	"long/internal/testutil"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -13,12 +15,10 @@ import (
 func TestDeletionMigrationAndFilters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	pool, sqlDB := timestampTestDatabase(t, ctx, "UTC")
-	migrations, err := fs.Sub(embedMigrations, "migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	provider, err := goose.NewProvider(goose.DialectPostgres, sqlDB, migrations)
+	pool := testutil.EmptyDatabase(t)
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	provider, err := goose.NewProvider(goose.DialectPostgres, sqlDB, os.DirFS("migrations"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Navigate, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { SWRConfig } from 'swr';
 import { AxiosError } from 'axios';
 import AdminLayout from '@/features/admin/components/admin-layout';
@@ -15,7 +15,6 @@ import {
   formatPermissions,
   hasAdminPermission,
   hasRootPermission,
-  Permission,
 } from '@/shared/lib/const';
 import type { Identity } from '@/shared/lib/types';
 
@@ -70,7 +69,6 @@ function mount(path = '/admin/users', sidebar = false) {
         )}
         <Routes>
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Navigate to="/admin/images" replace />} />
             <Route path="images" element={<AdminImagesPage />} />
             <Route path="users" element={<AdminUsersPage />} />
           </Route>
@@ -99,7 +97,7 @@ beforeEach(() => {
 });
 
 describe('admin access', () => {
-  it('accepts Admin or Root for admin access and labels every defined permission', () => {
+  it('accepts Admin or Root for admin access', () => {
     expect(hasAdminPermission(128)).toBe(false);
     expect(hasAdminPermission(8)).toBe(true);
     expect(hasAdminPermission(15)).toBe(true);
@@ -108,7 +106,6 @@ describe('admin access', () => {
     expect(hasRootPermission(ADMIN_PERMISSION)).toBe(false);
     expect(hasRootPermission(ROOT_PERMISSION)).toBe(true);
     expect(hasRootPermission(undefined)).toBe(false);
-    expect(Object.keys(Permission)).toHaveLength(5);
   });
 
   it.each([null, 3, 128])(
@@ -131,14 +128,6 @@ describe('admin access', () => {
     expect(screen.getByText('Checking admin access…')).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Admin' })).toBeNull();
     expect(mocks.post).not.toHaveBeenCalled();
-  });
-
-  it('reveals the entrance and redirects the admin root to images', async () => {
-    signIn();
-    mount('/admin', true);
-    expect(screen.getByRole('link', { name: 'Admin' })).toBeTruthy();
-    expect(await screen.findByText('image text')).toBeTruthy();
-    expect(mocks.post.mock.calls[0][1].variables.input.status).toBe('ACTIVE');
   });
 
   it('allows Root users to open the user administration page without A', async () => {

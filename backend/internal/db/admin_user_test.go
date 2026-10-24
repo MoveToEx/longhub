@@ -1,10 +1,12 @@
-package db
+package db_test
 
 import (
 	"bytes"
 	"context"
 	"errors"
+	"long/internal/db"
 	"long/internal/sqlc"
+	"long/internal/testutil"
 	"testing"
 	"time"
 
@@ -14,10 +16,7 @@ import (
 func TestAdminUpdateUserPreservesProtectedPermissionsAndPassword(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	pool, sqlDB := timestampTestDatabase(t, ctx, "UTC")
-	if err := Migrate(ctx, sqlDB); err != nil {
-		t.Fatal(err)
-	}
+	pool, _ := testutil.Database(t)
 	q := sqlc.New(pool)
 	oldHash := []byte("old-password-hash")
 	if err := q.CreateUser(ctx, sqlc.CreateUserParams{Username: "target", Email: "old@example.com", PasswordHash: oldHash}); err != nil {
@@ -53,7 +52,7 @@ func TestAdminUpdateUserPreservesProtectedPermissionsAndPassword(t *testing.T) {
 			}
 		})
 	}
-	if err := q.SetUserPermission(ctx, sqlc.SetUserPermissionParams{ID: 1, Permission: PermissionRoot | PermissionAdmin}); err != nil {
+	if err := q.SetUserPermission(ctx, sqlc.SetUserPermissionParams{ID: 1, Permission: db.PermissionRoot | db.PermissionAdmin}); err != nil {
 		t.Fatal(err)
 	}
 	before, err := q.GetUser(ctx, 1)

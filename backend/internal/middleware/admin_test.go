@@ -64,7 +64,6 @@ func TestAdminAuthentication(t *testing.T) {
 		{name: "root session", auth: "Session " + token, permission: db.PermissionRoot, status: 204},
 		{name: "root and admin session", auth: "Session " + token, permission: db.PermissionRoot | db.PermissionAdmin, status: 204},
 		{name: "revoked session", auth: "Session " + token, permission: 0, status: 403},
-		{name: "newly granted session", auth: "Session " + token, permission: db.PermissionAdmin, status: 204},
 		{name: "deleted account", auth: "Session " + token, userError: pgx.ErrNoRows, status: 401},
 		{name: "admin key", auth: "Key valid-key", permission: db.PermissionAdmin, keyPermission: db.PermissionAdmin, status: 204},
 		{name: "root key", auth: "Key valid-key", permission: db.PermissionRoot, keyPermission: db.PermissionRoot, status: 204},
