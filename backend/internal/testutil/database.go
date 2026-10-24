@@ -8,14 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"long/internal/db"
-	"long/internal/deletion"
 	"long/internal/sqlc"
 	"os"
 	"testing"
 	"time"
 )
 
-func Database(t *testing.T) (*pgxpool.Pool, deletion.Transaction) {
+func Database(t *testing.T) (*pgxpool.Pool, db.TransactionFunc) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {

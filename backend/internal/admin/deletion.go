@@ -2,13 +2,18 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"log"
 	"long/internal/admin/model"
-	"long/internal/deletion"
+	"long/internal/db"
 	"long/internal/queue"
 	"long/internal/sqlc"
+	"long/internal/webhook"
 	"strconv"
 	"strings"
 )
@@ -40,17 +45,13 @@ func (r *Resolver) listDeletionRequests(ctx context.Context, input *model.Deleti
 	if err := validatePage(input.Offset, input.Limit, input.Search); err != nil {
 		return nil, err
 	}
-	store, ok := r.Store.(DeletionStore)
-	if !ok {
-		return nil, gqlerror.Errorf("Unable to load deletion requests")
-	}
 	search, pattern, id := searchParams(input.Search)
-	rows, err := store.AdminListDeletionRequests(ctx, sqlc.AdminListDeletionRequestsParams{Status: input.Status.String(), Search: search, Pattern: pattern, SearchID: id,
+	rows, err := db.Query().AdminListDeletionRequests(ctx, sqlc.AdminListDeletionRequestsParams{Status: input.Status.String(), Search: search, Pattern: pattern, SearchID: id,
 		SortBy: input.SortBy.String(), Direction: input.Direction.String(), PageLimit: int32(input.Limit), PageOffset: int32(input.Offset)})
 	if err != nil {
 		return nil, queryError(ctx, err)
 	}
-	total, err := store.AdminCountDeletionRequests(ctx, sqlc.AdminCountDeletionRequestsParams{Status: input.Status.String(), Search: search, Pattern: pattern, SearchID: id})
+	total, err := db.Query().AdminCountDeletionRequests(ctx, sqlc.AdminCountDeletionRequestsParams{Status: input.Status.String(), Search: search, Pattern: pattern, SearchID: id})
 	if err != nil {
 		return nil, queryError(ctx, err)
 	}
@@ -70,24 +71,107 @@ func (r *Resolver) moderateDeletion(ctx context.Context, id string, action model
 	if err != nil || requestID <= 0 {
 		return nil, gqlerror.Errorf("Invalid deletion request id")
 	}
-	store, ok := r.Store.(DeletionStore)
-	if !ok || r.Deletions == nil {
-		return nil, gqlerror.Errorf("Unable to moderate deletion request")
-	}
-	err = r.Deletions.Moderate(ctx, requestID, actor, action.String(), sqlc.DeletionStatus(strings.ToLower(expected.String())))
-	if err != nil {
-		if errors.Is(err, deletion.ErrConflict) {
-			return nil, &gqlerror.Error{Message: err.Error(), Extensions: map[string]any{"code": "CONFLICT"}}
+	conflict := errors.New("request or image state changed; refresh and try again")
+	err = db.Transaction(ctx, func(q *sqlc.Queries) error {
+		imageID, err := q.GetDeletionRequestImage(ctx, requestID)
+		if err != nil {
+			return err
 		}
-		if errors.Is(err, deletion.ErrNotFound) {
-			return nil, &gqlerror.Error{Message: err.Error(), Extensions: map[string]any{"code": "NOT_FOUND"}}
+		image, err := q.LockImageForDeletion(ctx, imageID)
+		if err != nil {
+			return err
+		}
+		request, err := q.LockDeletionRequest(ctx, requestID)
+		if err != nil {
+			return err
+		}
+		if request.Status != sqlc.DeletionStatus(strings.ToLower(expected.String())) {
+			return conflict
+		}
+		var next sqlc.DeletionStatus
+		switch action {
+		case model.DeletionActionAccept:
+			if request.Status == sqlc.DeletionStatusActive || request.Status == sqlc.DeletionStatusRejected || request.Status == sqlc.DeletionStatusRevoked {
+				next = sqlc.DeletionStatusApproved
+			}
+		case model.DeletionActionReject:
+			if request.Status == sqlc.DeletionStatusActive {
+				next = sqlc.DeletionStatusRejected
+			}
+		case model.DeletionActionReopen:
+			if request.Status == sqlc.DeletionStatusRejected || request.Status == sqlc.DeletionStatusRevoked {
+				next = sqlc.DeletionStatusActive
+			}
+		case model.DeletionActionRevoke:
+			if request.Status == sqlc.DeletionStatusApproved {
+				next = sqlc.DeletionStatusRevoked
+			}
+		}
+		if next == "" {
+			return conflict
+		}
+		if next == sqlc.DeletionStatusApproved && (image.DeletedAt.Valid || image.ActiveDeletionID.Valid) {
+			return conflict
+		}
+		if action == model.DeletionActionRevoke && (!image.ActiveDeletionID.Valid || image.ActiveDeletionID.Int64 != requestID) {
+			return conflict
+		}
+		moderator := pgtype.Int8{Int64: actor, Valid: next != sqlc.DeletionStatusActive}
+		if err := q.UpdateDeletionDecision(ctx, sqlc.UpdateDeletionDecisionParams{ID: requestID, Status: next, ModeratorID: moderator}); err != nil {
+			return err
+		}
+		if next == sqlc.DeletionStatusApproved {
+			if err := q.ApproveImageDeletion(ctx, sqlc.ApproveImageDeletionParams{ImageID: imageID, RequestID: requestID}); err != nil {
+				return err
+			}
+		} else if action == model.DeletionActionRevoke {
+			if err := q.RevokeImageDeletion(ctx, imageID); err != nil {
+				return err
+			}
+		}
+		if next == sqlc.DeletionStatusApproved || action == model.DeletionActionRevoke {
+			event := "delete"
+			if action == model.DeletionActionRevoke {
+				event = "restore"
+			}
+			snapshot, err := q.GetImageSnapshot(ctx, imageID)
+			if err != nil {
+				return err
+			}
+			initiator, err := q.GetOther(ctx, actor)
+			if err != nil {
+				return err
+			}
+			payload, err := json.Marshal(webhook.DeletionEvent{
+				Event: event,
+				Data: webhook.Data{ImageID: imageID, Text: snapshot.Text, Rating: sqlc.Rating(snapshot.Rating), Tags: snapshot.Tags,
+					ImageURL: snapshot.ImageUrl, CreatedAt: snapshot.CreatedAt.Time, Uploader: &webhook.User{ID: snapshot.UserID, Username: snapshot.Username}},
+				Initiator: &webhook.User{ID: actor, Username: initiator.Username}, Version: snapshot.Version,
+			})
+			if err != nil {
+				return err
+			}
+			if err := q.InsertDeletionOutbox(ctx, sqlc.InsertDeletionOutboxParams{ImageID: imageID, Kind: "delete", Payload: payload}); err != nil {
+				return err
+			}
+			return q.InsertDeletionOutbox(ctx, sqlc.InsertDeletionOutboxParams{ImageID: imageID, Kind: "search", Payload: []byte(`{}`)})
+		}
+		return nil
+	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.Is(err, conflict) || errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, &gqlerror.Error{Message: conflict.Error(), Extensions: map[string]any{"code": "CONFLICT"}}
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, &gqlerror.Error{Message: "image or deletion request not found", Extensions: map[string]any{"code": "NOT_FOUND"}}
 		}
 		return nil, queryError(ctx, err)
 	}
 	if err := queue.WakeDeletionOutbox(ctx); err != nil {
 		log.Printf("wake deletion outbox (scheduled retry remains active): %v", err)
 	}
-	row, err := store.GetDeletionRequestRecord(ctx, requestID)
+	row, err := db.Query().GetDeletionRequestRecord(ctx, requestID)
 	if err != nil {
 		return nil, queryError(ctx, err)
 	}

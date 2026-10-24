@@ -49,11 +49,7 @@ func (r *Resolver) updateUser(ctx context.Context, id string, input model.Update
 			return nil, gqlerror.Errorf("Unable to update user")
 		}
 	}
-	store, ok := r.Store.(UserManagementStore)
-	if !ok {
-		return nil, gqlerror.Errorf("Unable to update user")
-	}
-	row, err := store.AdminUpdateUser(ctx, sqlc.AdminUpdateUserParams{
+	row, err := db.Query().AdminUpdateUser(ctx, sqlc.AdminUpdateUserParams{
 		ID: userID, Email: email, Permission: input.Permission, PasswordHash: hash, EditablePermissions: editable,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {

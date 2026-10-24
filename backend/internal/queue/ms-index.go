@@ -9,7 +9,6 @@ import (
 
 	"long/internal/config"
 	"long/internal/db"
-	"long/internal/deletion"
 	"long/internal/sqlc"
 
 	"github.com/hibiken/asynq"
@@ -87,7 +86,7 @@ func HandleIndexTask(ctx context.Context, task *asynq.Task) error {
 
 // Hold the same image lock as moderation until Meili acknowledges the write.
 // Jobs always use current database state, including jobs queued before deletion.
-func syncImageIndex(ctx context.Context, args IndexArgs, transact deletion.Transaction, write func(context.Context, int64, *IndexPayloadItem) error) error {
+func syncImageIndex(ctx context.Context, args IndexArgs, transact db.TransactionFunc, write func(context.Context, int64, *IndexPayloadItem) error) error {
 	return transact(ctx, func(tx *sqlc.Queries) error {
 		image, err := tx.LockImageForDeletion(ctx, args.ImageID)
 		if errors.Is(err, pgx.ErrNoRows) {

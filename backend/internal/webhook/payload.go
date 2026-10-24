@@ -45,6 +45,15 @@ type Payload struct {
 	Initiator *User  `json:"initiator,omitempty"`
 }
 
+// DeletionEvent is an immutable deletion or restoration snapshot stored in the
+// outbox. An omitted event name represents a legacy deletion event.
+type DeletionEvent struct {
+	Event     string `json:"event,omitempty"`
+	Data      Data   `json:"data"`
+	Initiator *User  `json:"initiator"`
+	Version   int32  `json:"version"`
+}
+
 // Embed Data so templates can use both .Data.Text and .Text.
 type templateFields struct {
 	Event string

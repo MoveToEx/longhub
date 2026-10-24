@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
-	"long/internal/deletion"
+	"long/internal/db"
 	"long/internal/sqlc"
 	"long/internal/testutil"
 	"net/http/httptest"
@@ -14,12 +14,13 @@ import (
 )
 
 func TestDeletionGraphQLIntegration(t *testing.T) {
-	pool, transact := testutil.Database(t)
+	pool, _ := testutil.Database(t)
 	testutil.Seed(t, pool)
 	q := sqlc.New(pool)
-	service := &deletion.Service{Transact: transact}
 	ctx := context.Background()
-	id, err := service.Create(ctx, 1, 2, "duplicate original")
+	db.Init(ctx, pool)
+	t.Cleanup(func() { db.Init(ctx, nil) })
+	id, err := q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: 1, UserID: 2, Reason: "duplicate original"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +28,7 @@ func TestDeletionGraphQLIntegration(t *testing.T) {
 		t.Helper()
 		body, _ := json.Marshal(map[string]any{"query": query, "variables": vars})
 		r := gin.New()
-		r.POST("/admin/graphql", func(c *gin.Context) { c.Set("UserID", int64(1)) }, NewHandler(q, service))
+		r.POST("/admin/graphql", func(c *gin.Context) { c.Set("UserID", int64(1)) }, GraphQL)
 		req := httptest.NewRequest("POST", "/admin/graphql", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()

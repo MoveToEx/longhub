@@ -8,6 +8,7 @@ package admin
 import (
 	"context"
 	"long/internal/admin/model"
+	"long/internal/db"
 	"long/internal/sqlc"
 	"strconv"
 )
@@ -31,7 +32,7 @@ func (r *queryResolver) Images(ctx context.Context, input *model.ImageQueryInput
 		return nil, err
 	}
 	search, pattern, searchID := searchParams(input.Search)
-	rows, err := r.Store.AdminListImages(ctx, sqlc.AdminListImagesParams{
+	rows, err := db.Query().AdminListImages(ctx, sqlc.AdminListImagesParams{
 		Status: input.Status.String(), Search: search, Pattern: pattern, SearchID: searchID,
 		SortBy: input.SortBy.String(), Direction: input.Direction.String(),
 		PageLimit: int32(input.Limit), PageOffset: int32(input.Offset),
@@ -39,7 +40,7 @@ func (r *queryResolver) Images(ctx context.Context, input *model.ImageQueryInput
 	if err != nil {
 		return nil, queryError(ctx, err)
 	}
-	total, err := r.Store.AdminCountImages(ctx, sqlc.AdminCountImagesParams{
+	total, err := db.Query().AdminCountImages(ctx, sqlc.AdminCountImagesParams{
 		Status: input.Status.String(), Search: search, Pattern: pattern, SearchID: searchID,
 	})
 	if err != nil {
@@ -79,7 +80,7 @@ func (r *queryResolver) Users(ctx context.Context, input *model.UserQueryInput) 
 		return nil, err
 	}
 	search, pattern, searchID := searchParams(input.Search)
-	rows, err := r.Store.AdminListUsers(ctx, sqlc.AdminListUsersParams{
+	rows, err := db.Query().AdminListUsers(ctx, sqlc.AdminListUsersParams{
 		Search: search, Pattern: pattern, SearchID: searchID,
 		SortBy: input.SortBy.String(), Direction: input.Direction.String(),
 		PageLimit: int32(input.Limit), PageOffset: int32(input.Offset),
@@ -87,7 +88,7 @@ func (r *queryResolver) Users(ctx context.Context, input *model.UserQueryInput) 
 	if err != nil {
 		return nil, queryError(ctx, err)
 	}
-	total, err := r.Store.AdminCountUsers(ctx, sqlc.AdminCountUsersParams{Search: search, Pattern: pattern, SearchID: searchID})
+	total, err := db.Query().AdminCountUsers(ctx, sqlc.AdminCountUsersParams{Search: search, Pattern: pattern, SearchID: searchID})
 	if err != nil {
 		return nil, queryError(ctx, err)
 	}

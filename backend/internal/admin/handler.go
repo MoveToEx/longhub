@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"long/internal/admin/model"
-	"long/internal/deletion"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,12 +24,10 @@ const maxRequestBytes = 1 << 20
 type actorContextKey struct{}
 type actorPermissionContextKey struct{}
 
-func NewHandler(store Store, services ...*deletion.Service) gin.HandlerFunc {
-	resolver := &Resolver{Store: store}
-	if len(services) > 0 {
-		resolver.Deletions = services[0]
-	}
-	config := Config{Resolvers: resolver}
+var graphqlServer = newGraphQLServer()
+
+func newGraphQLServer() *handler.Server {
+	config := Config{Resolvers: &Resolver{}}
 	config.Complexity.Query.DeletionRequests = func(child int, input *model.DeletionQueryInput) int {
 		limit := 25
 		if input != nil {
@@ -61,19 +58,21 @@ func NewHandler(store Store, services ...*deletion.Service) gin.HandlerFunc {
 		log.Printf("admin GraphQL panic: %v", value)
 		return gqlerror.Errorf("Unable to complete admin query")
 	})
-	return func(c *gin.Context) {
-		c.Header("Cache-Control", "no-store")
-		if c.Request.ContentLength > maxRequestBytes {
-			c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"errors": []gin.H{{"message": "Request body too large"}}})
-			return
-		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-		defer cancel()
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes)
-		ctx = context.WithValue(ctx, actorContextKey{}, c.GetInt64("UserID"))
-		ctx = context.WithValue(ctx, actorPermissionContextKey{}, c.GetInt64("Permission"))
-		server.ServeHTTP(c.Writer, c.Request.WithContext(ctx))
+	return server
+}
+
+func GraphQL(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	if c.Request.ContentLength > maxRequestBytes {
+		c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"errors": []gin.H{{"message": "Request body too large"}}})
+		return
 	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes)
+	ctx = context.WithValue(ctx, actorContextKey{}, c.GetInt64("UserID"))
+	ctx = context.WithValue(ctx, actorPermissionContextKey{}, c.GetInt64("Permission"))
+	graphqlServer.ServeHTTP(c.Writer, c.Request.WithContext(ctx))
 }
 
 func listComplexity(child, limit int) int {

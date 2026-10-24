@@ -1,4 +1,4 @@
-package queue
+package queue_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/hibiken/asynq"
 	"long/internal/config"
 	"long/internal/db"
-	"long/internal/deletion"
+	"long/internal/queue"
 	"long/internal/sqlc"
 	"long/internal/testutil"
 	"long/internal/webhook"
@@ -26,17 +26,17 @@ func TestDeletionDeliveryAfterRestorationPreservesSnapshotAndRetries(t *testing.
 	if _, err := pool.Exec(ctx, `INSERT INTO webhook(user_id,label,endpoint,secret,event_types) VALUES(2,'delete','https://example.com/webhook','secret',4)`); err != nil {
 		t.Fatal(err)
 	}
-	service := deletion.Service{Transact: transact}
-	id, err := service.Create(ctx, 1, 2, "duplicate")
+	q := sqlc.New(pool)
+	id, err := q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: 1, UserID: 2, Reason: "duplicate"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Moderate(ctx, id, 1, "ACCEPT", "active"); err != nil {
+	if err := moderateDeletion(ctx, id, "ACCEPT", "active"); err != nil {
 		t.Fatal(err)
 	}
 	var invocation *asynq.Task
-	if err := dispatchDeletionOutbox(ctx, transact, func(_ context.Context, task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
-		if task.Type() == TypeInvoke {
+	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, func(_ context.Context, task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
+		if task.Type() == queue.TypeInvoke {
 			invocation = task
 		}
 		return &asynq.TaskInfo{}, nil
@@ -46,7 +46,7 @@ func TestDeletionDeliveryAfterRestorationPreservesSnapshotAndRetries(t *testing.
 	if invocation == nil {
 		t.Fatal("approval did not dispatch webhook")
 	}
-	if err := service.Moderate(ctx, id, 1, "REVOKE", "approved"); err != nil {
+	if err := moderateDeletion(ctx, id, "REVOKE", "approved"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE version SET text='later text',version=2 WHERE id=1; UPDATE public.user SET username='renamed admin' WHERE id=1"); err != nil {
@@ -54,7 +54,7 @@ func TestDeletionDeliveryAfterRestorationPreservesSnapshotAndRetries(t *testing.
 	}
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var request WorkerRequest
+		var request queue.WorkerRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Error(err)
 		}
@@ -80,14 +80,14 @@ func TestDeletionDeliveryAfterRestorationPreservesSnapshotAndRetries(t *testing.
 	previous := config.GetConfig().Webhook
 	config.GetConfig().Webhook = config.WebhookConfig{PrivateKey: private, Endpoint: server.URL}
 	t.Cleanup(func() { config.GetConfig().Webhook = previous })
-	if err := HandleInvokeTask(ctx, invocation); err != nil {
+	if err := queue.HandleInvokeTask(ctx, invocation); err != nil {
 		t.Fatal(err)
 	}
 	var failures int
 	if err := pool.QueryRow(ctx, "SELECT failure_count FROM webhook WHERE id=1").Scan(&failures); err != nil || failures != 1 {
 		t.Fatal(failures, err)
 	}
-	if err := HandleInvokeTask(ctx, invocation); err != nil {
+	if err := queue.HandleInvokeTask(ctx, invocation); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, "SELECT failure_count FROM webhook WHERE id=1").Scan(&failures); err != nil || failures != 0 || calls != 2 {
@@ -106,23 +106,23 @@ VALUES(2,'lifecycle','https://example.com/webhook','secret',4),
       (2,'updates only','https://example.com/updates','secret',2)`); err != nil {
 		t.Fatal(err)
 	}
-	service := deletion.Service{Transact: transact}
-	id, err := service.Create(ctx, 1, 2, "duplicate")
+	q := sqlc.New(pool)
+	id, err := q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: 1, UserID: 2, Reason: "duplicate"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	moderate := func(action string, expected sqlc.DeletionStatus) {
 		t.Helper()
-		if err := service.Moderate(ctx, id, 1, action, expected); err != nil {
+		if err := moderateDeletion(ctx, id, action, expected); err != nil {
 			t.Fatal(err)
 		}
 	}
 	collect := func() []*asynq.Task {
 		t.Helper()
 		tasks := []*asynq.Task{}
-		if err := dispatchDeletionOutbox(ctx, transact, func(_ context.Context, task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
-			if task.Type() == TypeInvoke {
-				var args InvokeArgs
+		if err := queue.DispatchDeletionOutboxForTest(ctx, transact, func(_ context.Context, task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
+			if task.Type() == queue.TypeInvoke {
+				var args queue.InvokeArgs
 				if err := json.Unmarshal(task.Payload(), &args); err != nil {
 					t.Fatal(err)
 				}
@@ -148,7 +148,7 @@ VALUES(2,'lifecycle','https://example.com/webhook','secret',4),
 	present := true
 	names := map[string]int{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var request WorkerRequest
+		var request queue.WorkerRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Error(err)
 		}
@@ -173,7 +173,7 @@ VALUES(2,'lifecycle','https://example.com/webhook','secret',4),
 	config.GetConfig().Webhook = config.WebhookConfig{PrivateKey: private, Endpoint: server.URL}
 	t.Cleanup(func() { config.GetConfig().Webhook = previous })
 	for i := len(tasks) - 1; i >= 0; i-- {
-		if err := HandleInvokeTask(ctx, tasks[i]); err != nil {
+		if err := queue.HandleInvokeTask(ctx, tasks[i]); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -182,7 +182,7 @@ VALUES(2,'lifecycle','https://example.com/webhook','secret',4),
 	}
 	moderate("REVOKE", "approved")
 	for _, task := range collect() {
-		if err := HandleInvokeTask(ctx, task); err != nil {
+		if err := queue.HandleInvokeTask(ctx, task); err != nil {
 			t.Fatal(err)
 		}
 	}

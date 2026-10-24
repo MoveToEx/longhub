@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/hibiken/asynq"
 	"long/internal/db"
-	"long/internal/deletion"
 	"long/internal/sqlc"
+	"long/internal/webhook"
 	"time"
 )
 
@@ -28,7 +28,7 @@ func WakeDeletionOutbox(ctx context.Context) error {
 type enqueueTask func(context.Context, *asynq.Task, ...asynq.Option) (*asynq.TaskInfo, error)
 
 // A crash after enqueue is safe: stable task IDs and retained completions deduplicate retries.
-func dispatchDeletionOutbox(ctx context.Context, transact deletion.Transaction, enqueue enqueueTask) error {
+func dispatchDeletionOutbox(ctx context.Context, transact db.TransactionFunc, enqueue enqueueTask) error {
 	return transact(ctx, func(q *sqlc.Queries) error {
 		rows, err := q.LockPendingDeletionOutbox(ctx)
 		if err != nil {
@@ -45,7 +45,7 @@ func dispatchDeletionOutbox(ctx context.Context, transact deletion.Transaction, 
 					return err
 				}
 			} else {
-				var event deletion.Event
+				var event webhook.DeletionEvent
 				if err := json.Unmarshal(row.Payload, &event); err != nil {
 					return err
 				}

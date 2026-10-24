@@ -4,14 +4,16 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"log"
 	"long/internal/db"
-	"long/internal/deletion"
 	"long/internal/sqlc"
 	"long/internal/utils"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type PublicDeletionRequest struct {
@@ -98,15 +100,39 @@ func CreateImageDeletionRequest(c *gin.Context) {
 		utils.ErrorResponse(c, 400, "Invalid request body")
 		return
 	}
-	service := deletion.Service{Transact: db.Transaction}
-	requestID, err := service.Create(c.Request.Context(), id, c.GetInt64("UserID"), payload.Reason)
+	reason := strings.TrimSpace(payload.Reason)
+	if reason == "" || utf8.RuneCountInString(reason) > 2000 {
+		utils.ErrorResponse(c, 400, "reason must contain between 1 and 2000 characters")
+		return
+	}
+	ctx := c.Request.Context()
+	userID := c.GetInt64("UserID")
+	conflict := errors.New("an active request already exists or the image is deleted")
+	var requestID int64
+	err = db.Transaction(ctx, func(q *sqlc.Queries) error {
+		image, err := q.LockImageForDeletion(ctx, id)
+		if err != nil {
+			return err
+		}
+		if image.DeletedAt.Valid {
+			return conflict
+		}
+		exists, err := q.HasActiveDeletionRequest(ctx, sqlc.HasActiveDeletionRequestParams{ImageID: id, UserID: userID})
+		if err != nil {
+			return err
+		}
+		if exists {
+			return conflict
+		}
+		requestID, err = q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: id, UserID: userID, Reason: reason})
+		return err
+	})
 	if err != nil {
+		var pgErr *pgconn.PgError
 		switch {
-		case errors.Is(err, deletion.ErrReason):
-			utils.ErrorResponse(c, 400, "%s", err)
-		case errors.Is(err, deletion.ErrConflict):
+		case errors.Is(err, conflict) || errors.As(err, &pgErr) && pgErr.Code == "23505":
 			utils.ErrorResponse(c, 409, "An active request already exists or the image is deleted")
-		case errors.Is(err, deletion.ErrNotFound):
+		case errors.Is(err, pgx.ErrNoRows):
 			utils.ErrorResponse(c, 404, "Image not found")
 		default:
 			log.Printf("create deletion request: %v", err)
@@ -114,7 +140,7 @@ func CreateImageDeletionRequest(c *gin.Context) {
 		}
 		return
 	}
-	row, err := db.Query().GetDeletionRequestRecord(c.Request.Context(), requestID)
+	row, err := db.Query().GetDeletionRequestRecord(ctx, requestID)
 	if err != nil {
 		utils.ErrorResponse(c, 500, "Unable to load deletion request")
 		return

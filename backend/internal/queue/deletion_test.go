@@ -1,13 +1,21 @@
-package queue
+package queue_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
-	"long/internal/deletion"
+	"long/internal/admin"
+	"long/internal/db"
+	"long/internal/queue"
 	"long/internal/sqlc"
 	"long/internal/testutil"
+	"long/internal/webhook"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,16 +25,17 @@ func TestIndexUsesCurrentStateAndSerializesModeration(t *testing.T) {
 	pool, transact := testutil.Database(t)
 	testutil.Seed(t, pool)
 	ctx := context.Background()
+	db.Init(ctx, pool)
+	t.Cleanup(func() { db.Init(ctx, nil) })
 	q := sqlc.New(pool)
-	service := deletion.Service{Transact: transact}
-	id, err := service.Create(ctx, 1, 2, "duplicate")
+	id, err := q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: 1, UserID: 2, Reason: "duplicate"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	entered, release := make(chan struct{}), make(chan struct{})
 	indexDone, moderateDone := make(chan error, 1), make(chan error, 1)
 	go func() {
-		indexDone <- syncImageIndex(ctx, IndexArgs{ImageID: 1, VersionID: 1}, transact, func(_ context.Context, _ int64, doc *IndexPayloadItem) error {
+		indexDone <- queue.SyncImageIndexForTest(ctx, queue.IndexArgs{ImageID: 1, VersionID: 1}, transact, func(_ context.Context, _ int64, doc *queue.IndexPayloadItem) error {
 			if doc == nil {
 				return errors.New("unexpected removal")
 			}
@@ -36,7 +45,7 @@ func TestIndexUsesCurrentStateAndSerializesModeration(t *testing.T) {
 		})
 	}()
 	<-entered
-	go func() { moderateDone <- service.Moderate(ctx, id, 1, "ACCEPT", "active") }()
+	go func() { moderateDone <- moderateDeletion(ctx, id, "ACCEPT", "active") }()
 	select {
 	case err := <-moderateDone:
 		t.Fatalf("moderation bypassed index lock: %v", err)
@@ -54,7 +63,7 @@ func TestIndexUsesCurrentStateAndSerializesModeration(t *testing.T) {
 		t.Fatalf("deleted image must remain eligible for reconciliation: %+v %v", pending, err)
 	}
 	deleted := 0
-	write := func(_ context.Context, _ int64, doc *IndexPayloadItem) error {
+	write := func(_ context.Context, _ int64, doc *queue.IndexPayloadItem) error {
 		if doc != nil {
 			return errors.New("stale job republished deleted image")
 		}
@@ -62,7 +71,7 @@ func TestIndexUsesCurrentStateAndSerializesModeration(t *testing.T) {
 		return nil
 	}
 	for _, version := range []int64{1, 0, 999} {
-		if err := syncImageIndex(ctx, IndexArgs{ImageID: 1, VersionID: version}, transact, write); err != nil {
+		if err := queue.SyncImageIndexForTest(ctx, queue.IndexArgs{ImageID: 1, VersionID: version}, transact, write); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -73,21 +82,21 @@ func TestIndexUsesCurrentStateAndSerializesModeration(t *testing.T) {
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("acknowledged removal remained pending: %+v %v", pending, err)
 	}
-	if err := service.Moderate(ctx, id, 1, "REVOKE", "approved"); err != nil {
+	if err := moderateDeletion(ctx, id, "REVOKE", "approved"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE version SET text='latest restored text' WHERE id=1"); err != nil {
 		t.Fatal(err)
 	}
 	temporary := errors.New("search unavailable")
-	if err := syncImageIndex(ctx, IndexArgs{ImageID: 1}, transact, func(context.Context, int64, *IndexPayloadItem) error { return temporary }); !errors.Is(err, temporary) {
+	if err := queue.SyncImageIndexForTest(ctx, queue.IndexArgs{ImageID: 1}, transact, func(context.Context, int64, *queue.IndexPayloadItem) error { return temporary }); !errors.Is(err, temporary) {
 		t.Fatal(err)
 	}
 	image, err := q.LockImageForDeletion(ctx, 1)
 	if err != nil || image.IndexedVersion.Valid {
 		t.Fatal("failed sync marked indexed", err)
 	}
-	if err := syncImageIndex(ctx, IndexArgs{ImageID: 1, VersionID: 999}, transact, func(_ context.Context, _ int64, doc *IndexPayloadItem) error {
+	if err := queue.SyncImageIndexForTest(ctx, queue.IndexArgs{ImageID: 1, VersionID: 999}, transact, func(_ context.Context, _ int64, doc *queue.IndexPayloadItem) error {
 		if doc == nil || doc.Text != "latest restored text" {
 			return errors.New("stale metadata restored")
 		}
@@ -105,16 +114,18 @@ func TestOutboxRetriesAndDistinctApprovalSnapshots(t *testing.T) {
 	pool, transact := testutil.Database(t)
 	testutil.Seed(t, pool)
 	ctx := context.Background()
-	service := deletion.Service{Transact: transact}
+	db.Init(ctx, pool)
+	t.Cleanup(func() { db.Init(ctx, nil) })
+	q := sqlc.New(pool)
 	if _, err := pool.Exec(ctx, `INSERT INTO webhook(user_id,label,endpoint,secret,event_types) VALUES(2,'delete','https://example.com/webhook','secret',4)`); err != nil {
 		t.Fatal(err)
 	}
-	id, _ := service.Create(ctx, 1, 2, "duplicate")
+	id, _ := q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: 1, UserID: 2, Reason: "duplicate"})
 	for _, step := range []struct {
 		action string
 		status sqlc.DeletionStatus
 	}{{"ACCEPT", "active"}, {"REVOKE", "approved"}, {"ACCEPT", "revoked"}} {
-		if err := service.Moderate(ctx, id, 1, step.action, step.status); err != nil {
+		if err := moderateDeletion(ctx, id, step.action, step.status); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -122,7 +133,7 @@ func TestOutboxRetriesAndDistinctApprovalSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	offline := errors.New("queue offline")
-	if err := dispatchDeletionOutbox(ctx, transact, func(context.Context, *asynq.Task, ...asynq.Option) (*asynq.TaskInfo, error) { return nil, offline }); !errors.Is(err, offline) {
+	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, func(context.Context, *asynq.Task, ...asynq.Option) (*asynq.TaskInfo, error) { return nil, offline }); !errors.Is(err, offline) {
 		t.Fatal(err)
 	}
 	var pending int
@@ -152,25 +163,25 @@ func TestOutboxRetriesAndDistinctApprovalSnapshots(t *testing.T) {
 		tasks[key] = task
 		return &asynq.TaskInfo{}, nil
 	}
-	if err := dispatchDeletionOutbox(ctx, transact, enqueue); !errors.Is(err, offline) {
+	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, enqueue); !errors.Is(err, offline) {
 		t.Fatal(err)
 	}
-	if err := dispatchDeletionOutbox(ctx, transact, enqueue); err != nil {
+	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, enqueue); err != nil {
 		t.Fatal(err)
 	}
 	events := map[string]bool{}
 	names := map[string]int{}
 	syncs := 0
 	for _, task := range tasks {
-		if task.Type() == TypeIndex {
+		if task.Type() == queue.TypeIndex {
 			syncs++
 			continue
 		}
-		var args InvokeArgs
+		var args queue.InvokeArgs
 		if err := json.Unmarshal(task.Payload(), &args); err != nil {
 			t.Fatal(err)
 		}
-		var event deletion.Event
+		var event webhook.DeletionEvent
 		_ = json.Unmarshal(args.Body, &event.Data)
 		event.Initiator = args.Initiator
 		if args.EventID == "" || events[args.EventID] || event.Data.Text != "original text" || event.Initiator.Username != "admin" {
@@ -187,7 +198,29 @@ func TestOutboxRetriesAndDistinctApprovalSnapshots(t *testing.T) {
 		t.Fatal(pending)
 	}
 	before := len(tasks)
-	if err := dispatchDeletionOutbox(ctx, transact, enqueue); err != nil || len(tasks) != before {
+	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, enqueue); err != nil || len(tasks) != before {
 		t.Fatal("dispatched twice", err)
 	}
+}
+
+func moderateDeletion(ctx context.Context, id int64, action string, expected sqlc.DeletionStatus) error {
+	body, err := json.Marshal(map[string]any{
+		"query": `mutation($id: ID!, $action: DeletionAction!, $expectedStatus: DeletionStatus!) {
+			moderateDeletionRequest(id: $id, action: $action, expectedStatus: $expectedStatus) { id }
+		}`,
+		"variables": map[string]any{"id": id, "action": action, "expectedStatus": strings.ToUpper(string(expected))},
+	})
+	if err != nil {
+		return err
+	}
+	router := gin.New()
+	router.POST("/admin/graphql", func(c *gin.Context) { c.Set("UserID", int64(1)) }, admin.GraphQL)
+	request := httptest.NewRequest("POST", "/admin/graphql", bytes.NewReader(body)).WithContext(ctx)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != 200 || strings.Contains(response.Body.String(), `"errors"`) {
+		return fmt.Errorf("moderate deletion: HTTP %d: %s", response.Code, response.Body.String())
+	}
+	return nil
 }

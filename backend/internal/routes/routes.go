@@ -1,10 +1,8 @@
 package routes
 
 import (
-	"long/internal/admin"
+	adminHandlers "long/internal/admin"
 	"long/internal/config"
-	"long/internal/db"
-	"long/internal/deletion"
 	"long/internal/handlers"
 	userHandlers "long/internal/handlers/user"
 	"long/internal/middleware"
@@ -13,7 +11,6 @@ import (
 )
 
 func RegisterRoutes(r *gin.Engine) {
-	r.POST("/admin/graphql", middleware.Auth(true), middleware.RequireAdmin(), admin.NewHandler(db.Query(), &deletion.Service{Transact: db.Transaction}))
 	public := r.Group("/")
 	{
 		public.POST("/auth/login", handlers.LoginRoute)
@@ -38,6 +35,7 @@ func RegisterRoutes(r *gin.Engine) {
 	protected := r.Group("/")
 	protected.Use(middleware.Auth(true))
 	{
+		protected.POST("/admin/graphql", middleware.RequireAdmin(), adminHandlers.GraphQL)
 		protected.GET("/auth", handlers.GetIdentity)
 		protected.GET("/sync/full", handlers.NewFullSyncHandler(config.GetConfig().Sync))
 		protected.POST("/image/sign", handlers.CreateUploadSession)

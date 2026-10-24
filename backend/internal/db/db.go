@@ -35,6 +35,9 @@ func Query() *sqlc.Queries {
 	return sqlc.New(conn)
 }
 
+// TransactionFunc runs a callback within a database transaction.
+type TransactionFunc func(context.Context, func(*sqlc.Queries) error) error
+
 func Transaction(ctx context.Context, f func(qtx *sqlc.Queries) error) error {
 	return transaction(ctx, pgx.TxOptions{}, f)
 }
