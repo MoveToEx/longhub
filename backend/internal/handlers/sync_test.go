@@ -26,7 +26,53 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+func TestSyncVersionResponse(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		timestamp pgtype.Timestamptz
+		err       error
+		status    int
+		body      string
+	}{
+		{name: "empty", status: http.StatusOK, body: `{"error":null,"data":{"timestamp":null}}`},
+		{
+			name: "latest change in UTC",
+			timestamp: pgtype.Timestamptz{
+				Time:  time.Date(2026, 10, 27, 16, 30, 0, 123456000, time.FixedZone("UTC+8", 8*60*60)),
+				Valid: true,
+			},
+			status: http.StatusOK,
+			body:   `{"error":null,"data":{"timestamp":"2026-10-27T08:30:00.123456Z"}}`,
+		},
+		{
+			name: "database failure", err: errors.New("private database details"),
+			status: http.StatusInternalServerError, body: `{"error":"Unable to fetch catalog version"}`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			router := gin.New()
+			router.GET("/sync/version", newSyncVersionHandler(func(queryCtx context.Context) (pgtype.Timestamptz, error) {
+				if queryCtx != ctx {
+					t.Fatal("query did not receive the request context")
+				}
+				return test.timestamp, test.err
+			}))
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest("GET", "/sync/version", nil).WithContext(ctx))
+			if rec.Code != test.status || rec.Body.String() != test.body {
+				t.Fatalf("response = %d %s, want %d %s", rec.Code, rec.Body.String(), test.status, test.body)
+			}
+			if rec.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("version response must not be cached")
+			}
+		})
+	}
+}
 
 func readSyncExport(t *testing.T, data []byte) []GetImageResponse {
 	t.Helper()

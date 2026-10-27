@@ -27,6 +27,27 @@ const syncBatchSize = 1000
 type catalogSnapshot func(context.Context, func(GetImageResponse) error) error
 type snapshotTransaction func(context.Context, func(*sqlc.Queries) error) error
 
+type syncVersion struct {
+	Timestamp pgtype.Timestamptz `json:"timestamp"`
+}
+
+func NewSyncVersionHandler() gin.HandlerFunc {
+	return newSyncVersionHandler(db.Query().GetSyncVersion)
+}
+
+func newSyncVersionHandler(version func(context.Context) (pgtype.Timestamptz, error)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		timestamp, err := version(c.Request.Context())
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Unable to fetch catalog version")
+			return
+		}
+		timestamp.Time = timestamp.Time.UTC()
+		utils.SuccessResponse(c, syncVersion{Timestamp: timestamp})
+	}
+}
+
 type syncManifest struct {
 	Type          string    `json:"type"`
 	SchemaVersion int       `json:"schemaVersion"`

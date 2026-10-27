@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getSyncVersion = `-- name: GetSyncVersion :one
+SELECT GREATEST(
+    (SELECT MAX(created_at) FROM version),
+    (SELECT MAX(created_at) FROM deletion_outbox)
+)::TIMESTAMPTZ AS timestamp
+`
+
+// Version creation records uploads and metadata edits. The durable outbox records
+// deletions and restores, including events that have already been dispatched.
+func (q *Queries) GetSyncVersion(ctx context.Context) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getSyncVersion)
+	var timestamp pgtype.Timestamptz
+	err := row.Scan(&timestamp)
+	return timestamp, err
+}
+
 const listSyncImages = `-- name: ListSyncImages :many
 SELECT i.id, i.image_url, i.image_key, i.created_at,
        v.id AS current_version_id, v.version, v.text, v.rating,

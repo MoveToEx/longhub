@@ -1,3 +1,11 @@
+-- name: GetSyncVersion :one
+-- Version creation records uploads and metadata edits. The durable outbox records
+-- deletions and restores, including events that have already been dispatched.
+SELECT GREATEST(
+    (SELECT MAX(created_at) FROM version),
+    (SELECT MAX(created_at) FROM deletion_outbox)
+)::TIMESTAMPTZ AS timestamp;
+
 -- name: ListSyncImages :many
 SELECT i.id, i.image_url, i.image_key, i.created_at,
        v.id AS current_version_id, v.version, v.text, v.rating,

@@ -86,6 +86,8 @@ ON "version" USING GIN ("text" gin_trgm_ops);
 CREATE INDEX version_current_idx
 ON "version" ("image_id", "version" DESC);
 
+CREATE INDEX version_created_at_idx ON version (created_at);
+
 
 CREATE TABLE IF NOT EXISTS "version_tag" (
 	"version_id" BIGINT NOT NULL,
@@ -192,6 +194,7 @@ CREATE TABLE deletion_outbox (
   after_webhook_id BIGINT NOT NULL DEFAULT 0
 );
 CREATE INDEX deletion_outbox_pending_idx ON deletion_outbox(id) WHERE dispatched_at IS NULL;
+CREATE INDEX deletion_outbox_created_at_idx ON deletion_outbox(created_at);
 
 
 CREATE TABLE IF NOT EXISTS "upload_session" (

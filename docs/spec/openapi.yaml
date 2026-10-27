@@ -17,7 +17,47 @@ tags:
   - name: Tags
   - name: Users
   - name: Favorites
+  - name: Sync
 paths:
+  /sync/version:
+    get:
+      tags: [Sync]
+      operationId: getSyncVersion
+      summary: Get the catalog version
+      description: |
+        Returns the latest recorded image upload, metadata edit, deletion, or restore
+        as a UTC RFC 3339 timestamp, or null when no catalog change has been recorded.
+        Requires the same authentication as /sync/full. This is a change hint, not an
+        incremental replay cursor. Responses use Cache-Control: no-store.
+      security:
+        - LongHubAuth: []
+      responses:
+        '200':
+          description: Latest catalog change
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, data]
+                properties:
+                  error:
+                    type: string
+                    nullable: true
+                    example: null
+                  data:
+                    type: object
+                    required: [timestamp]
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+                        nullable: true
+                        example: '2026-10-27T08:30:00.123456Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /image:
     get:
       tags: [Images]

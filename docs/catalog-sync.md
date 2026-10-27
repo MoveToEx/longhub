@@ -3,6 +3,35 @@
 Use a full export to bootstrap or replace a local catalog, then use webhooks as
 notifications to refresh individual images.
 
+## Check the catalog version
+
+Send [`GET /sync/version`](/api/getSyncVersion) with either
+`Authorization: Key <app-key>` or `Authorization: Session <session-token>`,
+as with `/sync/full`:
+
+```sh
+curl --fail \
+  -H "Authorization: Key $LONGHUB_APP_KEY" \
+  https://api.example.com/sync/version
+```
+
+The JSON response uses the standard envelope:
+
+```json
+{"error":null,"data":{"timestamp":"2026-10-27T08:30:00.123456Z"}}
+```
+
+`timestamp` is the latest recorded catalog change as a UTC RFC 3339 timestamp.
+It includes image uploads, metadata edits (including tags and ratings), deletions,
+and restores. It is `null` when no catalog change has been recorded. Repeated
+checks return the same value until a later change is recorded; reads, exports,
+and background webhook or indexing work do not advance it. Responses use
+`Cache-Control: no-store`.
+
+Use this value to decide whether to refresh a local catalog. It is a change hint,
+not an incremental replay cursor or a guarantee that an export includes changes
+committed concurrently with it.
+
 ## Download a full export
 
 Send `GET /sync/full` with either `Authorization: Key <app-key>` or

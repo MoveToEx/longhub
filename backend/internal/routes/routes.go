@@ -37,6 +37,7 @@ func RegisterRoutes(r *gin.Engine) {
 	{
 		protected.POST("/admin/graphql", middleware.RequireAdmin(), adminHandlers.GraphQL)
 		protected.GET("/auth", handlers.GetIdentity)
+		protected.GET("/sync/version", handlers.NewSyncVersionHandler())
 		protected.GET("/sync/full", handlers.NewFullSyncHandler(config.GetConfig().Sync))
 		protected.POST("/image/sign", handlers.CreateUploadSession)
 		protected.POST("/image/ack", handlers.AcknowledgeSession)
