@@ -67,14 +67,14 @@ it("keeps public history collapsed until opened and shows full history with pagi
   mocks.auth.session = "";
   mocks.auth.data = { permission: 0 };
   mocks.get.mockResolvedValue({
-    data: { data: { items: [{ ...request, status: "revoked", processedAt: stamp }], total: 12 } },
+    data: { data: { items: [{ ...request, status: "approved", processedAt: stamp }], total: 12 } },
   });
   mount(<DeletionRequests id={7} deleted />);
   expect(mocks.get).not.toHaveBeenCalled();
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "Deletion requests" }));
   expect(await screen.findByText(request.reason)).toBeTruthy();
-  expect(screen.getByText("revoked")).toBeTruthy();
+  expect(screen.getByText("approved")).toBeTruthy();
   expect(screen.getByRole("link", { name: "reporter" }).getAttribute("href")).toBe("/user/3");
   expect(screen.queryByRole("button", { name: "Request deletion" })).toBeNull();
   await user.click(screen.getByRole("button", { name: "Go to page 2" }));
@@ -165,18 +165,17 @@ it("defaults moderation to active and resets pagination when filtering by status
 
 it.each([
   ["ACTIVE", ["Accept", "Reject"]],
-  ["APPROVED", ["Revoke"]],
+  ["APPROVED", []],
   ["REJECTED", ["Reopen", "Accept"]],
-  ["REVOKED", ["Reopen", "Accept"]],
 ] as const)("provides the appropriate actions for %s", (status, actions) => {
   mount(<DeletionActions row={{ ...row, status }} />);
-  expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(actions);
+  expect(screen.queryAllByRole("button").map((button) => button.textContent)).toEqual(actions);
 });
 
-it("explains blocked acceptance while another request controls deletion", () => {
+it("explains blocked acceptance for a permanently deleted image", () => {
   mount(<DeletionActions row={{ ...row, imageDeletedAt: stamp, activeDeletionId: "99" }} />);
   expect(screen.getByRole("button", { name: "Accept" }).hasAttribute("disabled")).toBe(true);
-  expect(screen.getByText(/Request #99 currently controls deletion/)).toBeTruthy();
+  expect(screen.getByText(/This image is permanently deleted/)).toBeTruthy();
   expect(screen.getByRole("button", { name: "Reject" }).hasAttribute("disabled")).toBe(false);
 });
 

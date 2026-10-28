@@ -42,7 +42,7 @@
         ],
         "operationId": "getSyncVersion",
         "summary": "Get the catalog version",
-        "description": "Returns the latest recorded image upload, metadata edit, deletion, or restore\nas a UTC RFC 3339 timestamp, or null when no catalog change has been recorded.\nRequires the same authentication as /sync/full. This is a change hint, not an\nincremental replay cursor. Responses use Cache-Control: no-store.\n",
+        "description": "Returns the latest recorded image upload, metadata edit, or deletion\nas a UTC RFC 3339 timestamp, using version creation and image deletion timestamps.\nReturns null when neither timestamp exists.\nRequires the same authentication as /sync/full. This is a change hint, not an\nincremental replay cursor. Responses use Cache-Control: no-store.\n",
         "security": [
           {
             "LongHubAuth": []

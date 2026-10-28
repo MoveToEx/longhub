@@ -103,13 +103,13 @@ func TestInvokeTaskPreservesUserIdentities(t *testing.T) {
 	}
 }
 
-func TestRestorationInvocationAndLegacyDeletion(t *testing.T) {
-	data, err := json.Marshal(webhook.PreviewData("restore"))
+func TestDeletionInvocationAndLegacyDeletion(t *testing.T) {
+	data, err := json.Marshal(webhook.PreviewData("delete"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, template := range []string{"", `{"event": {{json .Event}}, "data": {{json .Data}}}`} {
-		for _, event := range []string{"", "delete", "restore"} {
+		for _, event := range []string{"", "delete"} {
 			body, err := buildInvocationBody(db.WebhookDeletionEvent, data, template, nil, event)
 			if err != nil {
 				t.Fatal(err)
@@ -127,14 +127,14 @@ func TestRestorationInvocationAndLegacyDeletion(t *testing.T) {
 			}
 		}
 	}
-	if _, err := buildInvocationBody(db.WebhookUpdateEvent, data, "", nil, "restore"); err == nil {
-		t.Fatal("restoration escaped deletion subscription")
+	if _, err := buildInvocationBody(db.WebhookUpdateEvent, data, "", nil, "delete"); err == nil {
+		t.Fatal("deletion escaped its subscription")
 	}
 }
 
 func TestInvocationHeadersUseOriginalSnapshotAndLifecycleEvent(t *testing.T) {
-	data := webhook.PreviewData("restore")
-	initiator := webhook.PreviewInitiator("restore")
+	data := webhook.PreviewData("delete")
+	initiator := webhook.PreviewInitiator("delete")
 	task, err := NewInvokeTask(1, data.ImageID, 2, db.WebhookDeletionEvent, data, initiator)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +154,7 @@ func TestInvocationHeadersUseOriginalSnapshotAndLifecycleEvent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, event := range []string{"", "delete", "restore"} {
+		for _, event := range []string{"", "delete"} {
 			headers, err := buildInvocationHeaders(args.EventType, body, map[string]string{
 				"X-Event": `{{.Event}}`, "X-Text": `{{.Text}}`, "X-Actor": `{{.Initiator.Username}}`,
 			}, args.Initiator, event)

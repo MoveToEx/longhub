@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"long/internal/config"
 	"long/internal/db"
@@ -38,10 +39,11 @@ var webhookHTTPClient = &http.Client{
 }
 
 type DispatchArgs struct {
-	ID            int64 `json:"id"`
-	VersionID     int64 `json:"version"`
-	LastWebhookID int64 `json:"lastWebhookId"`
-	EventType     int64 `json:"eventType"`
+	ID            int64                         `json:"id"`
+	VersionID     int64                         `json:"version"`
+	LastWebhookID int64                         `json:"lastWebhookId"`
+	EventType     int64                         `json:"eventType"`
+	Deletion      *webhookpayload.DeletionEvent `json:"deletion,omitempty"`
 }
 
 type RequestBody = webhookpayload.Data
@@ -61,7 +63,6 @@ type InvocationBody struct {
 
 type InvokeArgs struct {
 	Event     string               `json:"event,omitempty"`
-	EventID   string               `json:"eventId,omitempty"`
 	WebhookID int64                `json:"webhookId"`
 	ImageID   int64                `json:"imageId"`
 	Version   int32                `json:"version"`
@@ -104,10 +105,7 @@ func invocationEventName(eventType int64, eventNames ...string) (string, error) 
 		return "", err
 	}
 	if len(eventNames) > 0 && eventNames[0] != "" && eventNames[0] != event {
-		if eventType != db.WebhookDeletionEvent || eventNames[0] != "restore" {
-			return "", errors.New("invalid webhook event name for subscription")
-		}
-		event = "restore"
+		return "", errors.New("invalid webhook event name for subscription")
 	}
 	return event, nil
 }
@@ -148,12 +146,16 @@ func buildInvocationBody(eventType int64, data []byte, bodyTemplate string, init
 }
 
 func NewDispatchTask(id, versionID, lastWebhookID int64, event int64) (*asynq.Task, error) {
-	payload, err := json.Marshal(DispatchArgs{
+	return newDispatchTask(DispatchArgs{
 		ID:            id,
 		VersionID:     versionID,
 		LastWebhookID: lastWebhookID,
 		EventType:     event,
 	})
+}
+
+func newDispatchTask(args DispatchArgs) (*asynq.Task, error) {
+	payload, err := json.Marshal(args)
 	if err != nil {
 		return nil, err
 	}
@@ -180,10 +182,17 @@ func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32,
 		return err
 	}
 
-	_, err = client.EnqueueContext(ctx, task, asynq.Unique(time.Hour))
+	opts := []asynq.Option{asynq.Unique(time.Hour)}
+	if eventType == db.WebhookDeletionEvent && body.DeletionEventID != "" {
+		opts = []asynq.Option{
+			asynq.TaskID(fmt.Sprintf("%s-webhook-%d", body.DeletionEventID, webhookID)),
+			asynq.Retention(24 * time.Hour),
+		}
+	}
+	_, err = client.EnqueueContext(ctx, task, opts...)
 
 	if err != nil {
-		if errors.Is(err, asynq.ErrDuplicateTask) {
+		if errors.Is(err, asynq.ErrDuplicateTask) || errors.Is(err, asynq.ErrTaskIDConflict) {
 			return nil
 		}
 		return err
@@ -191,13 +200,8 @@ func EnqueueInvoke(ctx context.Context, webhookID, imageID int64, version int32,
 	return nil
 }
 
-func NewInvokeTask(id, imageID int64, version int32, eventType int64, body RequestBody, initiator *webhookpayload.User, eventIDs ...string) (*asynq.Task, error) {
-	var eventID string
-	if len(eventIDs) > 0 {
-		eventID = eventIDs[0]
-	}
+func NewInvokeTask(id, imageID int64, version int32, eventType int64, body RequestBody, initiator *webhookpayload.User) (*asynq.Task, error) {
 	return newInvokeTask(InvokeArgs{
-		EventID:   eventID,
 		WebhookID: id,
 		ImageID:   imageID,
 		Version:   version,
@@ -236,54 +240,66 @@ func HandleDispatchTask(ctx context.Context, task *asynq.Task) error {
 		return err
 	}
 
-	image, err := db.Query().GetImageVersionForWebhook(ctx, sqlc.GetImageVersionForWebhookParams{
-		ImageID:   args.ID,
-		VersionID: args.VersionID,
-	})
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	body := RequestBody{
-		ImageID:   image.ImageID,
-		Text:      image.Text,
-		Rating:    image.Rating,
-		ImageURL:  image.ImageUrl,
-		Tags:      image.Tags,
-		CreatedAt: image.CreatedAt.Time,
-		Uploader: &webhookpayload.User{
-			ID: image.UploaderID, Username: image.UploaderUsername,
-		},
-	}
-	initiator := &webhookpayload.User{
-		ID: image.InitiatorID, Username: image.InitiatorUsername,
-	}
-	if args.EventType == db.WebhookUpdateEvent {
-		previous, err := db.Query().GetPreviousImageVersionForWebhook(ctx, sqlc.GetPreviousImageVersionForWebhookParams{
-			ImageID: image.ImageID,
-			Version: image.Version,
+	var body RequestBody
+	var initiator *webhookpayload.User
+	var version int32
+	if args.EventType == db.WebhookDeletionEvent {
+		if args.Deletion == nil || args.Deletion.Data.ImageID != args.ID {
+			return errors.New("missing or invalid deletion snapshot")
+		}
+		body, initiator, version = args.Deletion.Data, args.Deletion.Initiator, args.Deletion.Version
+	} else {
+		image, err := db.Query().GetImageVersionForWebhook(ctx, sqlc.GetImageVersionForWebhookParams{
+			ImageID:   args.ID,
+			VersionID: args.VersionID,
 		})
+
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
-		body.Changes = webhookpayload.Compare(RequestBody{
-			Text: previous.Text, Rating: previous.Rating, Tags: previous.Tags,
-		}, body)
+
+		body = RequestBody{
+			ImageID:   image.ImageID,
+			Text:      image.Text,
+			Rating:    image.Rating,
+			ImageURL:  image.ImageUrl,
+			Tags:      image.Tags,
+			CreatedAt: image.CreatedAt.Time,
+			Uploader: &webhookpayload.User{
+				ID: image.UploaderID, Username: image.UploaderUsername,
+			},
+		}
+		initiator = &webhookpayload.User{
+			ID: image.InitiatorID, Username: image.InitiatorUsername,
+		}
+		if args.EventType == db.WebhookUpdateEvent {
+			previous, err := db.Query().GetPreviousImageVersionForWebhook(ctx, sqlc.GetPreviousImageVersionForWebhookParams{
+				ImageID: image.ImageID,
+				Version: image.Version,
+			})
+			if err != nil {
+				return err
+			}
+			body.Changes = webhookpayload.Compare(RequestBody{
+				Text: previous.Text, Rating: previous.Rating, Tags: previous.Tags,
+			}, body)
+		}
+		version = image.Version
 	}
 
 	for i := range webhooks {
-		err := EnqueueInvoke(ctx, webhooks[i].ID, image.ImageID, image.Version, args.EventType, body, initiator)
+		err := EnqueueInvoke(ctx, webhooks[i].ID, args.ID, version, args.EventType, body, initiator)
 		if err != nil {
 			return err
 		}
 	}
 
 	if len(webhooks) == WebhookBatchSize {
-		task, err := NewDispatchTask(args.ID, args.VersionID, webhooks[len(webhooks)-1].ID, args.EventType)
+		args.LastWebhookID = webhooks[len(webhooks)-1].ID
+		task, err := newDispatchTask(args)
 		if err != nil {
 			return err
 		}
@@ -305,6 +321,10 @@ func HandleInvokeTask(ctx context.Context, task *asynq.Task) error {
 	var args InvokeArgs
 	if err := json.Unmarshal(task.Payload(), &args); err != nil {
 		return err
+	}
+	// Discard obsolete queued events without delivering them or penalizing the webhook.
+	if _, err := invocationEventName(args.EventType, args.Event); err != nil {
+		return nil
 	}
 
 	if args.EventType != db.WebhookDeletionEvent {

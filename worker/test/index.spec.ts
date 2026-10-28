@@ -118,12 +118,12 @@ describe("webhook gateway", () => {
 			headers: {
 				"content-type": "application/vnd.longhub+json",
 				"x-signature": clientSignature,
-				"authorization": "Bearer token", "x-event": "image.restore", "x-image-id": "42",
+				"authorization": "Bearer token", "x-event": "image.delete", "x-image-id": "42",
 			},
 		}).reply(204);
 		const response = await invoke(await signedRequest({
 			url: "https://client.example/headers", body: "{}", clientSignature,
-			headers: { "Authorization": "Bearer token", "X-Event": "image.restore", "X-Image-ID": "42", "Content-Type": "application/vnd.longhub+json" },
+			headers: { "Authorization": "Bearer token", "X-Event": "image.delete", "X-Image-ID": "42", "Content-Type": "application/vnd.longhub+json" },
 		}));
 		expect(response.status).toBe(204);
 		fetchMock.assertNoPendingInterceptors();

@@ -23,11 +23,11 @@ export function DeletionActions({ row }: { row: AdminDeletion }) {
   const [error, setError] = useState("");
   const actions: DeletionAction[] =
     row.status === "APPROVED"
-      ? ["REVOKE"]
+      ? []
       : row.status === "ACTIVE"
         ? ["ACCEPT", "REJECT"]
         : ["REOPEN", "ACCEPT"];
-  const blocked = Boolean(row.imageDeletedAt && row.activeDeletionId !== row.id);
+  const blocked = Boolean(row.imageDeletedAt);
   const submit = async (action: DeletionAction) => {
     setBusy(true);
     setError("");
@@ -65,14 +65,13 @@ export function DeletionActions({ row }: { row: AdminDeletion }) {
             disabled={busy || (action === "ACCEPT" && blocked)}
             onClick={() => void submit(action)}
           >
-            {{ ACCEPT: "Accept", REJECT: "Reject", REVOKE: "Revoke", REOPEN: "Reopen" }[action]}
+            {{ ACCEPT: "Accept", REJECT: "Reject", REOPEN: "Reopen" }[action]}
           </Button>
         ))}
       </div>
       {blocked && actions.includes("ACCEPT") && (
         <p className="max-w-60 text-xs text-muted-foreground">
-          Request #{row.activeDeletionId} currently controls deletion. Revoke it before accepting
-          this request.
+          This image is permanently deleted. This request cannot be accepted.
         </p>
       )}
       {error && (

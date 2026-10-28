@@ -14,7 +14,7 @@ const MaxHeadersSize = 64 * 1024
 // Header names are fixed; each value is a plain text Go template using the same
 // fields and functions as a body template.
 func RenderHeaders(templates map[string]string, event string, data Data, initiator *User) (map[string]string, error) {
-	if event != "create" && event != "update" && event != "delete" && event != "restore" {
+	if event != "create" && event != "update" && event != "delete" {
 		return nil, errors.New("invalid webhook event")
 	}
 	if len(templates) > MaxHeaders {

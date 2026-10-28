@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { renderWebhookBodyPreview, renderWebhookHeadersPreview } from '../src/features/settings/lib/webhook-body-preview.ts';
 
 test('default preview preserves the envelope and includes changes only for update', () => {
-  for (const event of ['create', 'update', 'delete', 'restore']) {
+  for (const event of ['create', 'update', 'delete']) {
     const body = JSON.parse(renderWebhookBodyPreview('', event));
     assert.equal(body.event, event);
     assert.equal(body.data.imageID, 42);
@@ -17,7 +17,7 @@ test('default preview preserves the envelope and includes changes only for updat
 });
 
 test('owner and initiator identities are distinct, with Go fields and JSON keys', () => {
-  for (const event of ['create', 'update', 'delete', 'restore']) {
+  for (const event of ['create', 'update', 'delete']) {
     const expectedOwner = { id: 7, username: 'image-owner' };
     const expectedInitiator = event === 'create' ? expectedOwner : { id: 9, username: 'image-editor' };
     const defaultBody = JSON.parse(renderWebhookBodyPreview('', event));
@@ -96,7 +96,7 @@ test('source limits use UTF-8 bytes and rendered output is bounded', () => {
 });
 
 test('multiple headers render plain text using body fields and lifecycle events', () => {
-  for (const event of ['create', 'update', 'delete', 'restore']) {
+  for (const event of ['create', 'update', 'delete']) {
     assert.equal(renderWebhookHeadersPreview([
       { name: 'Authorization', value: 'Bearer token' },
       { name: 'X-Event', value: '{{.Event | printf "image.%s"}}' },

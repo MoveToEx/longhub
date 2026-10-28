@@ -2,7 +2,6 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -72,6 +71,7 @@ func (r *Resolver) moderateDeletion(ctx context.Context, id string, action model
 		return nil, gqlerror.Errorf("Invalid deletion request id")
 	}
 	conflict := errors.New("request or image state changed; refresh and try again")
+	var deletionEvent *webhook.DeletionEvent
 	err = db.Transaction(ctx, func(q *sqlc.Queries) error {
 		imageID, err := q.GetDeletionRequestImage(ctx, requestID)
 		if err != nil {
@@ -91,7 +91,7 @@ func (r *Resolver) moderateDeletion(ctx context.Context, id string, action model
 		var next sqlc.DeletionStatus
 		switch action {
 		case model.DeletionActionAccept:
-			if request.Status == sqlc.DeletionStatusActive || request.Status == sqlc.DeletionStatusRejected || request.Status == sqlc.DeletionStatusRevoked {
+			if request.Status == sqlc.DeletionStatusActive || request.Status == sqlc.DeletionStatusRejected {
 				next = sqlc.DeletionStatusApproved
 			}
 		case model.DeletionActionReject:
@@ -99,21 +99,14 @@ func (r *Resolver) moderateDeletion(ctx context.Context, id string, action model
 				next = sqlc.DeletionStatusRejected
 			}
 		case model.DeletionActionReopen:
-			if request.Status == sqlc.DeletionStatusRejected || request.Status == sqlc.DeletionStatusRevoked {
+			if request.Status == sqlc.DeletionStatusRejected {
 				next = sqlc.DeletionStatusActive
-			}
-		case model.DeletionActionRevoke:
-			if request.Status == sqlc.DeletionStatusApproved {
-				next = sqlc.DeletionStatusRevoked
 			}
 		}
 		if next == "" {
 			return conflict
 		}
 		if next == sqlc.DeletionStatusApproved && (image.DeletedAt.Valid || image.ActiveDeletionID.Valid) {
-			return conflict
-		}
-		if action == model.DeletionActionRevoke && (!image.ActiveDeletionID.Valid || image.ActiveDeletionID.Int64 != requestID) {
 			return conflict
 		}
 		moderator := pgtype.Int8{Int64: actor, Valid: next != sqlc.DeletionStatusActive}
@@ -124,16 +117,6 @@ func (r *Resolver) moderateDeletion(ctx context.Context, id string, action model
 			if err := q.ApproveImageDeletion(ctx, sqlc.ApproveImageDeletionParams{ImageID: imageID, RequestID: requestID}); err != nil {
 				return err
 			}
-		} else if action == model.DeletionActionRevoke {
-			if err := q.RevokeImageDeletion(ctx, imageID); err != nil {
-				return err
-			}
-		}
-		if next == sqlc.DeletionStatusApproved || action == model.DeletionActionRevoke {
-			event := "delete"
-			if action == model.DeletionActionRevoke {
-				event = "restore"
-			}
 			snapshot, err := q.GetImageSnapshot(ctx, imageID)
 			if err != nil {
 				return err
@@ -142,19 +125,12 @@ func (r *Resolver) moderateDeletion(ctx context.Context, id string, action model
 			if err != nil {
 				return err
 			}
-			payload, err := json.Marshal(webhook.DeletionEvent{
-				Event: event,
-				Data: webhook.Data{ImageID: imageID, Text: snapshot.Text, Rating: sqlc.Rating(snapshot.Rating), Tags: snapshot.Tags,
+			deletionEvent = &webhook.DeletionEvent{
+				Data: webhook.Data{DeletionEventID: "deletion-request-" + strconv.FormatInt(requestID, 10),
+					ImageID: imageID, Text: snapshot.Text, Rating: sqlc.Rating(snapshot.Rating), Tags: snapshot.Tags,
 					ImageURL: snapshot.ImageUrl, CreatedAt: snapshot.CreatedAt.Time, Uploader: &webhook.User{ID: snapshot.UserID, Username: snapshot.Username}},
 				Initiator: &webhook.User{ID: actor, Username: initiator.Username}, Version: snapshot.Version,
-			})
-			if err != nil {
-				return err
 			}
-			if err := q.InsertDeletionOutbox(ctx, sqlc.InsertDeletionOutboxParams{ImageID: imageID, Kind: "delete", Payload: payload}); err != nil {
-				return err
-			}
-			return q.InsertDeletionOutbox(ctx, sqlc.InsertDeletionOutboxParams{ImageID: imageID, Kind: "search", Payload: []byte(`{}`)})
 		}
 		return nil
 	})
@@ -168,8 +144,10 @@ func (r *Resolver) moderateDeletion(ctx context.Context, id string, action model
 		}
 		return nil, queryError(ctx, err)
 	}
-	if err := queue.WakeDeletionOutbox(ctx); err != nil {
-		log.Printf("wake deletion outbox (scheduled retry remains active): %v", err)
+	if deletionEvent != nil {
+		if err := queue.EnqueueDeletion(ctx, *deletionEvent); err != nil {
+			log.Printf("enqueue image deletion %d: %v", deletionEvent.Data.ImageID, err)
+		}
 	}
 	row, err := db.Query().GetDeletionRequestRecord(ctx, requestID)
 	if err != nil {

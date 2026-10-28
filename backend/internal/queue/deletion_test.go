@@ -13,10 +13,8 @@ import (
 	"long/internal/queue"
 	"long/internal/sqlc"
 	"long/internal/testutil"
-	"long/internal/webhook"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -82,124 +80,59 @@ func TestIndexUsesCurrentStateAndSerializesModeration(t *testing.T) {
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("acknowledged removal remained pending: %+v %v", pending, err)
 	}
-	if err := moderateDeletion(ctx, id, "REVOKE", "approved"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, "UPDATE version SET text='latest restored text' WHERE id=1"); err != nil {
-		t.Fatal(err)
+	if err := moderateDeletion(ctx, id, "REOPEN", "approved"); err == nil {
+		t.Fatal("approved deletion was reopened")
 	}
 	temporary := errors.New("search unavailable")
 	if err := queue.SyncImageIndexForTest(ctx, queue.IndexArgs{ImageID: 1}, transact, func(context.Context, int64, *queue.IndexPayloadItem) error { return temporary }); !errors.Is(err, temporary) {
 		t.Fatal(err)
 	}
 	image, err := q.LockImageForDeletion(ctx, 1)
-	if err != nil || image.IndexedVersion.Valid {
-		t.Fatal("failed sync marked indexed", err)
-	}
-	if err := queue.SyncImageIndexForTest(ctx, queue.IndexArgs{ImageID: 1, VersionID: 999}, transact, func(_ context.Context, _ int64, doc *queue.IndexPayloadItem) error {
-		if doc == nil || doc.Text != "latest restored text" {
-			return errors.New("stale metadata restored")
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	image, _ = q.LockImageForDeletion(ctx, 1)
-	if image.IndexedVersion.Int64 != image.CurrentVersionID.Int64 {
-		t.Fatal("successful sync not committed")
+	if err != nil || !image.DeletedAt.Valid || !image.IndexedVersion.Valid || image.IndexedVersion.Int64 != 0 {
+		t.Fatal("failed sync changed the deletion tombstone", image, err)
 	}
 }
 
-func TestOutboxRetriesAndDistinctApprovalSnapshots(t *testing.T) {
-	pool, transact := testutil.Database(t)
+func TestDeletionEnqueuesAfterCommitAndSurvivesQueueFailure(t *testing.T) {
+	pool, _ := testutil.Database(t)
 	testutil.Seed(t, pool)
 	ctx := context.Background()
 	db.Init(ctx, pool)
 	t.Cleanup(func() { db.Init(ctx, nil) })
 	q := sqlc.New(pool)
-	if _, err := pool.Exec(ctx, `INSERT INTO webhook(user_id,label,endpoint,secret,event_types) VALUES(2,'delete','https://example.com/webhook','secret',4)`); err != nil {
+	id, err := q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: 1, UserID: 2, Reason: "duplicate"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	id, _ := q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: 1, UserID: 2, Reason: "duplicate"})
-	for _, step := range []struct {
-		action string
-		status sqlc.DeletionStatus
-	}{{"ACCEPT", "active"}, {"REVOKE", "approved"}, {"ACCEPT", "revoked"}} {
-		if err := moderateDeletion(ctx, id, step.action, step.status); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := pool.Exec(ctx, "UPDATE version SET text='changed after approval' WHERE id=1; UPDATE public.user SET username='renamed admin' WHERE id=1"); err != nil {
-		t.Fatal(err)
-	}
+	var tasks []*asynq.Task
 	offline := errors.New("queue offline")
-	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, func(context.Context, *asynq.Task, ...asynq.Option) (*asynq.TaskInfo, error) { return nil, offline }); !errors.Is(err, offline) {
+	queue.SetEnqueueForTest(t, func(_ context.Context, task *asynq.Task, _ ...asynq.Option) (*asynq.TaskInfo, error) {
+		image, err := q.GetImageDetails(ctx, 1)
+		if err != nil || !image.DeletedAt.Valid || image.ActiveDeletionID.Int64 != id {
+			t.Fatal("task enqueued before deletion committed", image, err)
+		}
+		tasks = append(tasks, task)
+		return nil, offline
+	})
+	if err := moderateDeletion(ctx, id, "ACCEPT", "active"); err != nil {
 		t.Fatal(err)
 	}
-	var pending int
-	_ = pool.QueryRow(ctx, "SELECT count(*) FROM deletion_outbox WHERE dispatched_at IS NULL").Scan(&pending)
-	if pending != 6 {
-		t.Fatal(pending)
+	if len(tasks) != 2 || tasks[0].Type() != queue.TypeIndex || tasks[1].Type() != queue.TypeDispatch {
+		t.Fatal("both queue operations must be attempted", tasks)
 	}
-	var mu sync.Mutex
-	tasks := map[string]*asynq.Task{}
-	failAfterFirst := true
-	enqueue := func(_ context.Context, task *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		key := ""
-		for _, opt := range opts {
-			if opt.Type() == asynq.TaskIDOpt {
-				key = opt.Value().(string)
-			}
-		}
-		if _, exists := tasks[key]; exists {
-			return nil, asynq.ErrTaskIDConflict
-		}
-		if len(tasks) == 1 && failAfterFirst {
-			failAfterFirst = false
-			return nil, offline
-		}
-		tasks[key] = task
-		return &asynq.TaskInfo{}, nil
-	}
-	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, enqueue); !errors.Is(err, offline) {
+	var args queue.DispatchArgs
+	if err := json.Unmarshal(tasks[1].Payload(), &args); err != nil {
 		t.Fatal(err)
 	}
-	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, enqueue); err != nil {
-		t.Fatal(err)
+	if args.Deletion == nil || args.Deletion.Data.Text != "original text" || args.Deletion.Initiator.Username != "admin" || args.Deletion.Data.DeletionEventID == "" {
+		t.Fatal("deletion snapshot was not queued", args)
 	}
-	events := map[string]bool{}
-	names := map[string]int{}
-	syncs := 0
-	for _, task := range tasks {
-		if task.Type() == queue.TypeIndex {
-			syncs++
-			continue
-		}
-		var args queue.InvokeArgs
-		if err := json.Unmarshal(task.Payload(), &args); err != nil {
-			t.Fatal(err)
-		}
-		var event webhook.DeletionEvent
-		_ = json.Unmarshal(args.Body, &event.Data)
-		event.Initiator = args.Initiator
-		if args.EventID == "" || events[args.EventID] || event.Data.Text != "original text" || event.Initiator.Username != "admin" {
-			t.Fatal(args, event)
-		}
-		events[args.EventID] = true
-		names[args.Event]++
+	pending, err := q.GetUnindexedImages(ctx)
+	if err != nil || len(pending) != 1 || pending[0].ImageID != 1 || pending[0].VersionID != 0 {
+		t.Fatal("queue failure prevented index reconciliation", pending, err)
 	}
-	if len(events) != 3 || syncs != 3 || names["delete"] != 2 || names["restore"] != 1 {
-		t.Fatal(len(events), syncs, names)
-	}
-	_ = pool.QueryRow(ctx, "SELECT count(*) FROM deletion_outbox WHERE dispatched_at IS NULL").Scan(&pending)
-	if pending != 0 {
-		t.Fatal(pending)
-	}
-	before := len(tasks)
-	if err := queue.DispatchDeletionOutboxForTest(ctx, transact, enqueue); err != nil || len(tasks) != before {
-		t.Fatal("dispatched twice", err)
+	if err := moderateDeletion(ctx, id, "ACCEPT", "approved"); err == nil || len(tasks) != 2 {
+		t.Fatal("conflicting approval enqueued more work", err, len(tasks))
 	}
 }
 

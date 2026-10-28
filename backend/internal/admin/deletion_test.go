@@ -53,6 +53,20 @@ func TestDeletionGraphQLIntegration(t *testing.T) {
 	if !strings.Contains(got, `"code":"CONFLICT"`) {
 		t.Fatal(got)
 	}
+	for _, action := range []string{"ACCEPT", "REJECT", "REOPEN"} {
+		got = invoke(mutation, map[string]any{"id": id, "action": action, "expectedStatus": "APPROVED"})
+		if !strings.Contains(got, `"code":"CONFLICT"`) {
+			t.Fatalf("approved deletion allowed %s: %s", action, got)
+		}
+	}
+	got = invoke(mutation, map[string]any{"id": id, "action": "REVOKE", "expectedStatus": "APPROVED"})
+	if !strings.Contains(got, `"errors"`) {
+		t.Fatal("removed moderation action was accepted", got)
+	}
+	image, err := q.LockImageForDeletion(ctx, 1)
+	if err != nil || !image.DeletedAt.Valid || image.ActiveDeletionID.Int64 != id {
+		t.Fatal("approved image did not stay deleted", image, err)
+	}
 	got = invoke(list, nil)
 	if !strings.Contains(got, `"total":0`) {
 		t.Fatal(got)

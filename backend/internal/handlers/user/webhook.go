@@ -322,7 +322,6 @@ func validateWebhookEvents(eventTypes int64, validate func(string) error) error 
 		{db.WebhookCreationEvent, "create"},
 		{db.WebhookUpdateEvent, "update"},
 		{db.WebhookDeletionEvent, "delete"},
-		{db.WebhookDeletionEvent, "restore"},
 	} {
 		if eventTypes&event.flag == 0 && eventTypes != 0 {
 			continue

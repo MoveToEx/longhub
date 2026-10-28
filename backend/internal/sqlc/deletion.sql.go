@@ -105,20 +105,6 @@ func (q *Queries) AdminListDeletionRequests(ctx context.Context, arg AdminListDe
 	return items, nil
 }
 
-const advanceDeletionOutbox = `-- name: AdvanceDeletionOutbox :exec
-UPDATE deletion_outbox SET after_webhook_id = $2 WHERE id = $1
-`
-
-type AdvanceDeletionOutboxParams struct {
-	ID             int64 `json:"id"`
-	AfterWebhookID int64 `json:"afterWebhookId"`
-}
-
-func (q *Queries) AdvanceDeletionOutbox(ctx context.Context, arg AdvanceDeletionOutboxParams) error {
-	_, err := q.db.Exec(ctx, advanceDeletionOutbox, arg.ID, arg.AfterWebhookID)
-	return err
-}
-
 const approveImageDeletion = `-- name: ApproveImageDeletion :exec
 UPDATE image SET deleted_at = NOW(), active_deletion_id = $1::BIGINT,
   indexed_version = NULL WHERE id = $2
@@ -142,15 +128,6 @@ UPDATE image SET indexed_version = 0 WHERE id = $1
 // Zero marks an acknowledged search tombstone; version IDs are always positive.
 func (q *Queries) CommitImageIndexRemoval(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, commitImageIndexRemoval, id)
-	return err
-}
-
-const completeDeletionOutbox = `-- name: CompleteDeletionOutbox :exec
-UPDATE deletion_outbox SET dispatched_at = NOW() WHERE id = $1
-`
-
-func (q *Queries) CompleteDeletionOutbox(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, completeDeletionOutbox, id)
 	return err
 }
 
@@ -320,21 +297,6 @@ func (q *Queries) HasActiveDeletionRequest(ctx context.Context, arg HasActiveDel
 	return exists, err
 }
 
-const insertDeletionOutbox = `-- name: InsertDeletionOutbox :exec
-INSERT INTO deletion_outbox(image_id, kind, payload) VALUES ($1, $2, $3)
-`
-
-type InsertDeletionOutboxParams struct {
-	ImageID int64  `json:"imageId"`
-	Kind    string `json:"kind"`
-	Payload []byte `json:"payload"`
-}
-
-func (q *Queries) InsertDeletionOutbox(ctx context.Context, arg InsertDeletionOutboxParams) error {
-	_, err := q.db.Exec(ctx, insertDeletionOutbox, arg.ImageID, arg.Kind, arg.Payload)
-	return err
-}
-
 const listImageDeletionRequests = `-- name: ListImageDeletionRequests :many
 SELECT id, created_at, processed_at, image_id, user_id, processed_by, reason, status, requester_username, moderator_username, image_deleted_at, active_deletion_id FROM deletion_request_detail WHERE image_id = $1
 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3
@@ -420,48 +382,6 @@ func (q *Queries) LockImageForDeletion(ctx context.Context, id int64) (Image, er
 		&i.IndexedVersion,
 	)
 	return i, err
-}
-
-const lockPendingDeletionOutbox = `-- name: LockPendingDeletionOutbox :many
-SELECT id, image_id, kind, payload, created_at, dispatched_at, after_webhook_id FROM deletion_outbox WHERE dispatched_at IS NULL ORDER BY id LIMIT 25 FOR UPDATE SKIP LOCKED
-`
-
-func (q *Queries) LockPendingDeletionOutbox(ctx context.Context) ([]DeletionOutbox, error) {
-	rows, err := q.db.Query(ctx, lockPendingDeletionOutbox)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []DeletionOutbox{}
-	for rows.Next() {
-		var i DeletionOutbox
-		if err := rows.Scan(
-			&i.ID,
-			&i.ImageID,
-			&i.Kind,
-			&i.Payload,
-			&i.CreatedAt,
-			&i.DispatchedAt,
-			&i.AfterWebhookID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const revokeImageDeletion = `-- name: RevokeImageDeletion :exec
-UPDATE image SET deleted_at = NULL, active_deletion_id = NULL,
-  indexed_version = NULL WHERE id = $1
-`
-
-func (q *Queries) RevokeImageDeletion(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, revokeImageDeletion, id)
-	return err
 }
 
 const updateDeletionDecision = `-- name: UpdateDeletionDecision :exec

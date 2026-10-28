@@ -25,8 +25,9 @@ paths:
       operationId: getSyncVersion
       summary: Get the catalog version
       description: |
-        Returns the latest recorded image upload, metadata edit, deletion, or restore
-        as a UTC RFC 3339 timestamp, or null when no catalog change has been recorded.
+        Returns the latest recorded image upload, metadata edit, or deletion
+        as a UTC RFC 3339 timestamp, using version creation and image deletion timestamps.
+        Returns null when neither timestamp exists.
         Requires the same authentication as /sync/full. This is a change hint, not an
         incremental replay cursor. Responses use Cache-Control: no-store.
       security:

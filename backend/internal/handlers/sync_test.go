@@ -303,7 +303,6 @@ INSERT INTO tag(name) VALUES('later tag');
 INSERT INTO version_tag(version_id,tag_id)
 SELECT current_version_id,t.id FROM image CROSS JOIN tag t WHERE image.id=1002 AND t.name='later tag';
 UPDATE image SET deleted_at=NOW() WHERE id=1003;
-UPDATE image SET deleted_at=NULL WHERE id=1004;
 INSERT INTO image(user_id,image_key,image_url) VALUES(2,'new','https://example.com/new');
 WITH nv AS (INSERT INTO version(image_id,user_id,text,rating)
  VALUES(1005,2,'new image','none') RETURNING id)
@@ -317,7 +316,7 @@ UPDATE image SET current_version_id=nv.id FROM nv WHERE image.id=1005;
 		t.Fatal(err)
 	}
 	if len(images) != 1002 || images[len(images)-1].ID != 1003 {
-		t.Fatalf("concurrent deletion/restoration/insertion changed snapshot: %d images", len(images))
+		t.Fatalf("concurrent deletion/insertion changed snapshot: %d images", len(images))
 	}
 	image := images[len(images)-2]
 	if image.ID != 1002 || image.Text != "snapshot text" || image.Version != 1 || len(image.Tags) != 0 {

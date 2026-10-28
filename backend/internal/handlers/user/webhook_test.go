@@ -25,9 +25,9 @@ func TestHeaderTemplatesValidateSubscribedEventsAndTypes(t *testing.T) {
 	if err := validateHeaderTemplates(headers, db.WebhookCreationEvent|db.WebhookUpdateEvent); err == nil {
 		t.Fatal("accepted an unguarded update-only field for creation")
 	}
-	headers = map[string]string{"X-Event": "{{if eq .Event \"restore\"}}bad\nvalue{{else}}{{.Event}}{{end}}"}
+	headers = map[string]string{"X-Event": "{{if eq .Event \"delete\"}}bad\nvalue{{else}}{{.Event}}{{end}}"}
 	if err := validateHeaderTemplates(headers, db.WebhookDeletionEvent); err == nil {
-		t.Fatal("deletion subscription did not validate restoration headers")
+		t.Fatal("deletion subscription did not validate deletion headers")
 	}
 	for _, raw := range []string{`[]`, `"header"`, `{"X-Test":1}`, `{"X-Test":null}`, `{"X-Test":true}`} {
 		if _, err := decodeHeaderTemplates(json.RawMessage(raw)); err == nil {
@@ -99,13 +99,6 @@ func TestWebhookHeaderTemplatesCreateListAndEdit(t *testing.T) {
 				t.Fatalf("stored headers: %+v", stored.HeaderTemplates)
 			}
 		}
-	}
-}
-
-func TestDeletionTemplateAlsoValidatesRestoration(t *testing.T) {
-	value := `{{if eq .Event "restore"}}invalid JSON{{else}}{}{{end}}`
-	if err := validateBodyTemplate(nullableBodyTemplate(&value), db.WebhookDeletionEvent); err == nil {
-		t.Fatal("deletion subscription did not validate restoration")
 	}
 }
 

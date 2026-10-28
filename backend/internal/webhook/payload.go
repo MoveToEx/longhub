@@ -45,13 +45,11 @@ type Payload struct {
 	Initiator *User  `json:"initiator,omitempty"`
 }
 
-// DeletionEvent is an immutable deletion or restoration snapshot stored in the
-// outbox. An omitted event name represents a legacy deletion event.
+// DeletionEvent is an immutable deletion snapshot carried by queued webhook tasks.
 type DeletionEvent struct {
-	Event     string `json:"event,omitempty"`
-	Data      Data   `json:"data"`
-	Initiator *User  `json:"initiator"`
-	Version   int32  `json:"version"`
+	Data      Data  `json:"data"`
+	Initiator *User `json:"initiator"`
+	Version   int32 `json:"version"`
 }
 
 // Embed Data so templates can use both .Data.Text and .Text.
@@ -113,7 +111,7 @@ func (b *templateBuffer) Write(data []byte) (int, error) {
 }
 
 func Render(bodyTemplate, event string, data Data, initiator *User) ([]byte, error) {
-	if event != "create" && event != "update" && event != "delete" && event != "restore" {
+	if event != "create" && event != "update" && event != "delete" {
 		return nil, errors.New("invalid webhook event")
 	}
 	if len(bodyTemplate) > MaxTemplateSize {

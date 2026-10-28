@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { isAxiosError } from "axios";
 import useSWR, { useSWRConfig } from "swr";
-import { ChevronDownIcon, Clock3, CircleCheck, CircleX, RotateCcw } from "lucide-react";
+import { ChevronDownIcon, Clock3, CircleCheck, CircleX } from "lucide-react";
 import { toast } from "sonner";
 import useAuth from "@/features/auth/hooks/use-auth";
 import api from "@/shared/lib/axios";
@@ -40,7 +40,7 @@ import { invalidateDeletionCaches } from "../lib/deletion-cache";
 type Request = {
   id: number;
   reason: string;
-  status: "active" | "approved" | "rejected" | "revoked";
+  status: "active" | "approved" | "rejected";
   requester: { id: number; username: string };
   createdAt: string;
   processedAt: string | null;
@@ -49,7 +49,6 @@ const statusIcons = {
   active: Clock3,
   approved: CircleCheck,
   rejected: CircleX,
-  revoked: RotateCcw,
 };
 
 function RequestStatusBadge({ status }: { status: Request["status"] }) {

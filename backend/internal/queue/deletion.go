@@ -2,87 +2,29 @@ package queue
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
+	"time"
+
 	"github.com/hibiken/asynq"
 	"long/internal/db"
-	"long/internal/sqlc"
 	"long/internal/webhook"
-	"time"
 )
 
-func NewDeletionOutboxTask() *asynq.Task { return asynq.NewTask(TypeDeletionOutbox, nil) }
-
-func WakeDeletionOutbox(ctx context.Context) error {
+// EnqueueDeletion schedules webhook delivery and search removal after the deletion commits.
+func EnqueueDeletion(ctx context.Context, event webhook.DeletionEvent) error {
 	if client == nil {
-		return nil
+		return errors.New("queue is not initialized")
 	}
-	_, err := client.EnqueueContext(ctx, NewDeletionOutboxTask(), asynq.Unique(time.Second))
-	if errors.Is(err, asynq.ErrDuplicateTask) {
-		return nil
-	}
-	return err
-}
-
-type enqueueTask func(context.Context, *asynq.Task, ...asynq.Option) (*asynq.TaskInfo, error)
-
-// A crash after enqueue is safe: stable task IDs and retained completions deduplicate retries.
-func dispatchDeletionOutbox(ctx context.Context, transact db.TransactionFunc, enqueue enqueueTask) error {
-	return transact(ctx, func(q *sqlc.Queries) error {
-		rows, err := q.LockPendingDeletionOutbox(ctx)
-		if err != nil {
-			return err
-		}
-		for _, row := range rows {
-			if row.Kind == "search" {
-				task, err := NewIndexTask(row.ImageID, 0)
-				if err != nil {
-					return err
-				}
-				_, err = enqueue(ctx, task, asynq.TaskID(fmt.Sprintf("deletion-search-%d", row.ID)), asynq.Retention(24*time.Hour))
-				if err != nil && !errors.Is(err, asynq.ErrTaskIDConflict) {
-					return err
-				}
-			} else {
-				var event webhook.DeletionEvent
-				if err := json.Unmarshal(row.Payload, &event); err != nil {
-					return err
-				}
-				webhooks, err := q.GetWebhooksByEvent(ctx, sqlc.GetWebhooksByEventParams{AfterID: row.AfterWebhookID, EventType: db.WebhookDeletionEvent, FailureCount: WebhookMaxFailures, PageLimit: WebhookBatchSize})
-				if err != nil {
-					return err
-				}
-				for _, webhook := range webhooks {
-					eventID := fmt.Sprintf("deletion-%d", row.ID)
-					event.Data.DeletionEventID = eventID
-					task, err := newInvokeTask(InvokeArgs{
-						Event: event.Event, EventID: eventID, WebhookID: webhook.ID, ImageID: row.ImageID,
-						Version: event.Version, EventType: db.WebhookDeletionEvent, Initiator: event.Initiator,
-					}, event.Data)
-					if err != nil {
-						return err
-					}
-					_, err = enqueue(ctx, task, asynq.TaskID(fmt.Sprintf("%s-webhook-%d", eventID, webhook.ID)), asynq.Retention(24*time.Hour))
-					if err != nil && !errors.Is(err, asynq.ErrTaskIDConflict) {
-						return err
-					}
-				}
-				if len(webhooks) == WebhookBatchSize {
-					if err := q.AdvanceDeletionOutbox(ctx, sqlc.AdvanceDeletionOutboxParams{ID: row.ID, AfterWebhookID: webhooks[len(webhooks)-1].ID}); err != nil {
-						return err
-					}
-					continue
-				}
-			}
-			if err := q.CompleteDeletionOutbox(ctx, row.ID); err != nil {
-				return err
-			}
-		}
-		return nil
+	task, err := newDispatchTask(DispatchArgs{
+		ID: event.Data.ImageID, EventType: db.WebhookDeletionEvent, Deletion: &event,
 	})
-}
-
-func HandleDeletionOutboxTask(ctx context.Context, _ *asynq.Task) error {
-	return dispatchDeletionOutbox(ctx, db.Transaction, client.EnqueueContext)
+	if err != nil {
+		return err
+	}
+	indexErr := EnqueueIndex(ctx, event.Data.ImageID, 0)
+	_, dispatchErr := client.EnqueueContext(ctx, task, asynq.Unique(time.Hour))
+	if errors.Is(dispatchErr, asynq.ErrDuplicateTask) {
+		dispatchErr = nil
+	}
+	return errors.Join(indexErr, dispatchErr)
 }

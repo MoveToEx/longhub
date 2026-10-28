@@ -1,7 +1,7 @@
 export type SortDirection = "ASC" | "DESC";
 export type ImageStatus = "ACTIVE" | "DELETED" | "ALL";
-export type DeletionStatus = "ACTIVE" | "APPROVED" | "REJECTED" | "REVOKED";
-export type DeletionAction = "ACCEPT" | "REJECT" | "REVOKE" | "REOPEN";
+export type DeletionStatus = "ACTIVE" | "APPROVED" | "REJECTED";
+export type DeletionAction = "ACCEPT" | "REJECT" | "REOPEN";
 export type AdminResource = "images" | "users" | "deletionRequests";
 
 export type AdminQueryInput = {

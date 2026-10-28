@@ -8,7 +8,7 @@ import (
 )
 
 func TestRenderHeadersUsesBodyTemplateFieldsAsPlainText(t *testing.T) {
-	for _, event := range []string{"create", "update", "delete", "restore"} {
+	for _, event := range []string{"create", "update", "delete"} {
 		data, initiator := PreviewData(event), PreviewInitiator(event)
 		headers, err := RenderHeaders(map[string]string{
 			"authorization": "Bearer token",

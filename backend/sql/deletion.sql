@@ -25,10 +25,6 @@ UPDATE deletion SET status = @status,
 UPDATE image SET deleted_at = NOW(), active_deletion_id = @request_id::BIGINT,
   indexed_version = NULL WHERE id = @image_id;
 
--- name: RevokeImageDeletion :exec
-UPDATE image SET deleted_at = NULL, active_deletion_id = NULL,
-  indexed_version = NULL WHERE id = $1;
-
 -- name: ListImageDeletionRequests :many
 SELECT * FROM deletion_request_detail WHERE image_id = $1
 ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3;
@@ -55,18 +51,6 @@ SELECT COUNT(*) FROM deletion_request_detail
 WHERE (@status::TEXT = 'ALL' OR UPPER(status::TEXT) = @status::TEXT)
   AND (@search::TEXT = '' OR id = @search_id::BIGINT OR image_id = @search_id::BIGINT
        OR reason ILIKE @pattern::TEXT OR requester_username ILIKE @pattern::TEXT);
-
--- name: InsertDeletionOutbox :exec
-INSERT INTO deletion_outbox(image_id, kind, payload) VALUES ($1, $2, $3);
-
--- name: LockPendingDeletionOutbox :many
-SELECT * FROM deletion_outbox WHERE dispatched_at IS NULL ORDER BY id LIMIT 25 FOR UPDATE SKIP LOCKED;
-
--- name: AdvanceDeletionOutbox :exec
-UPDATE deletion_outbox SET after_webhook_id = $2 WHERE id = $1;
-
--- name: CompleteDeletionOutbox :exec
-UPDATE deletion_outbox SET dispatched_at = NOW() WHERE id = $1;
 
 -- name: GetImageSnapshot :one
 SELECT i.id, i.image_url, i.created_at, i.user_id, u.username,

@@ -17,11 +17,9 @@ Webhooks allow an external server to get notified when certain events happen.
 | --- | --- | --- |
 | Creation | 1 | `create` |
 | Update | 2 | `update` |
-| Deletion / restoration | 4 | `delete`, `restore` |
+| Deletion | 4 | `delete` |
 
-Set `eventTypes` to `7` to receive all events. Restoring an image belongs to the
-existing deletion subscription and emits `restore`; it does not create a metadata
-version. Receivers and custom templates should handle both lifecycle event names.
+Set `eventTypes` to `7` to receive all events. Approved image deletions are permanent.
 
 For a local replica, treat every notification as a request to refresh the image
 through `GET /image/:id`. The current response determines whether to upsert or
@@ -38,7 +36,7 @@ The following fields are exposed at root level:
 
 ```ts
 {
-  Event: 'create' | 'update' | 'delete' | 'restore',
+  Event: 'create' | 'update' | 'delete',
   Initiator: {    // user whose action triggered this webhook
     ID: number,
     Username: string,
@@ -91,9 +89,9 @@ Do not surround <code v-pre>{{json}}</code> expressions with additional quotes:
 For update events, `data.changes` contains only changed metadata fields. Each entry
 has `old` and `new` values. Text and rating are compared directly; tags are compared
 as unordered sets of database tags. An update without metadata changes has an
-empty changes object. Creation, deletion, and restoration payloads omit `changes`.
-`CreatedAt` is the image creation time, not the notification time. Deletion and
-restoration payloads also include `deletionEventId` for deduplication; it is not
+empty changes object. Creation and deletion payloads omit `changes`.
+`CreatedAt` is the image creation time, not the notification time. Deletion
+payloads also include `deletionEventId` for deduplication; it is not
 a revision or an ordering cursor.
 
 
@@ -134,8 +132,6 @@ An example that complies with Discord Webhook:
     ],
   {{else if eq .Event "delete"}}
     "content": "{{.Initiator.Username}} deleted image #{{.Data.ImageID}}",
-  {{else if eq .Event "restore"}}
-    "content": "{{.Initiator.Username}} restored image #{{.Data.ImageID}}",
   {{end}}
   "username": "LONG Hub Webhook",
   "avatar_url": "https://longhub.top/long.jpg"
@@ -173,7 +169,7 @@ For example, the create and edit APIs accept:
 }
 ```
 
-For image 42's restoration event, these produce `X-Longhub-Event: restore` and
+For image 42's deletion event, these produce `X-Longhub-Event: delete` and
 `X-Image-ID: 42`. The request preview shows rendered header values for the selected
 sample event. Header values are rendered from the event snapshot at delivery;
 invalid output counts as a failed invocation.

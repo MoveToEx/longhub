@@ -18,7 +18,6 @@ const (
 	DeletionStatusActive   DeletionStatus = "active"
 	DeletionStatusApproved DeletionStatus = "approved"
 	DeletionStatusRejected DeletionStatus = "rejected"
-	DeletionStatusRevoked  DeletionStatus = "revoked"
 )
 
 func (e *DeletionStatus) Scan(src interface{}) error {
@@ -161,16 +160,6 @@ type Deletion struct {
 	ProcessedBy pgtype.Int8        `json:"processedBy"`
 	Reason      string             `json:"reason"`
 	Status      DeletionStatus     `json:"status"`
-}
-
-type DeletionOutbox struct {
-	ID             int64              `json:"id"`
-	ImageID        int64              `json:"imageId"`
-	Kind           string             `json:"kind"`
-	Payload        []byte             `json:"payload"`
-	CreatedAt      pgtype.Timestamptz `json:"createdAt"`
-	DispatchedAt   pgtype.Timestamptz `json:"dispatchedAt"`
-	AfterWebhookID int64              `json:"afterWebhookId"`
 }
 
 type DeletionRequestDetail struct {

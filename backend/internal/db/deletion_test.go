@@ -37,9 +37,9 @@ func TestDeletionMigrationAndFilters(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := sqlc.New(pool)
-	var backfilled int
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM deletion_outbox WHERE kind='search'").Scan(&backfilled); err != nil || backfilled != 1 {
-		t.Fatal(backfilled, err)
+	pending, err := q.GetUnindexedImages(ctx)
+	if err != nil || len(pending) != 1 || pending[0].ImageID != 1 || pending[0].VersionID != 0 {
+		t.Fatal("historical deletion was not eligible for index reconciliation", pending, err)
 	}
 	for _, tc := range []struct {
 		status, search, pattern, sort, direction string
@@ -55,7 +55,6 @@ func TestDeletionMigrationAndFilters(t *testing.T) {
 		{"ALL", "2", "%2%", "ID", "ASC", 2, 0, []int64{2, 3}, 2},
 		{"APPROVED", "_%", `%\_\%%`, "PROCESSED_AT", "ASC", 0, 0, []int64{1}, 1},
 		{"REJECTED", "", "%", "ID", "DESC", 0, 0, []int64{3}, 1},
-		{"REVOKED", "", "%", "ID", "DESC", 0, 0, []int64{}, 0},
 	} {
 		rows, err := q.AdminListDeletionRequests(ctx, sqlc.AdminListDeletionRequestsParams{Status: tc.status, Search: tc.search, Pattern: tc.pattern, SearchID: tc.id, SortBy: tc.sort, Direction: tc.direction, PageOffset: tc.offset, PageLimit: 2})
 		if err != nil {

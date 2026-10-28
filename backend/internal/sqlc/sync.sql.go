@@ -14,12 +14,11 @@ import (
 const getSyncVersion = `-- name: GetSyncVersion :one
 SELECT GREATEST(
     (SELECT MAX(created_at) FROM version),
-    (SELECT MAX(created_at) FROM deletion_outbox)
+    (SELECT MAX(deleted_at) FROM image)
 )::TIMESTAMPTZ AS timestamp
 `
 
-// Version creation records uploads and metadata edits. The durable outbox records
-// deletions and restores, including events that have already been dispatched.
+// Version creation records uploads and metadata edits; image tombstones record deletions.
 func (q *Queries) GetSyncVersion(ctx context.Context) (pgtype.Timestamptz, error) {
 	row := q.db.QueryRow(ctx, getSyncVersion)
 	var timestamp pgtype.Timestamptz

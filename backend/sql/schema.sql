@@ -21,8 +21,7 @@ CREATE TYPE "upload_status" AS ENUM (
 CREATE TYPE "deletion_status" AS ENUM (
 	'active',
 	'approved',
-	'rejected',
-	'revoked'
+	'rejected'
 );
 
 CREATE TABLE IF NOT EXISTS "user" (
@@ -184,18 +183,15 @@ JOIN public.user u ON u.id = d.user_id
 JOIN image i ON i.id = d.image_id
 LEFT JOIN public.user m ON m.id = d.processed_by;
 
-CREATE TABLE deletion_outbox (
-  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  image_id BIGINT NOT NULL REFERENCES image(id),
-  kind TEXT NOT NULL CHECK (kind IN ('search', 'delete')),
-  payload JSONB NOT NULL DEFAULT '{}',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  dispatched_at TIMESTAMPTZ,
-  after_webhook_id BIGINT NOT NULL DEFAULT 0
-);
-CREATE INDEX deletion_outbox_pending_idx ON deletion_outbox(id) WHERE dispatched_at IS NULL;
-CREATE INDEX deletion_outbox_created_at_idx ON deletion_outbox(created_at);
-
+CREATE FUNCTION enforce_permanent_image_deletion() RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'Image deletions are permanent' USING ERRCODE = '23514';
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER permanent_image_deletion
+BEFORE UPDATE OF deleted_at ON image
+FOR EACH ROW WHEN (OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL)
+EXECUTE FUNCTION enforce_permanent_image_deletion();
 
 CREATE TABLE IF NOT EXISTS "upload_session" (
 	"id" BIGINT GENERATED ALWAYS AS IDENTITY,

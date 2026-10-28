@@ -22,8 +22,9 @@ The JSON response uses the standard envelope:
 ```
 
 `timestamp` is the latest recorded catalog change as a UTC RFC 3339 timestamp.
-It includes image uploads, metadata edits (including tags and ratings), deletions,
-and restores. It is `null` when no catalog change has been recorded. Repeated
+It uses the latest `version.created_at` or `image.deleted_at`, covering uploads,
+metadata edits (including tags and ratings), and deletions. It is `null` when no
+catalog change has been recorded. Repeated
 checks return the same value until a later change is recorded; reads, exports,
 and background webhook or indexing work do not advance it. Responses use
 `Cache-Control: no-store`.

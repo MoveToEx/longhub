@@ -58,7 +58,6 @@ export default function AdminTable<T extends { id: string }>({
           ACTIVE: "Active",
           APPROVED: "Approved",
           REJECTED: "Rejected",
-          REVOKED: "Revoked",
           ALL: "All requests",
         };
   const [visible, setVisible] = useState(() =>

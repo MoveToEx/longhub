@@ -118,19 +118,17 @@ const (
 	DeletionActionAccept DeletionAction = "ACCEPT"
 	DeletionActionReject DeletionAction = "REJECT"
 	DeletionActionReopen DeletionAction = "REOPEN"
-	DeletionActionRevoke DeletionAction = "REVOKE"
 )
 
 var AllDeletionAction = []DeletionAction{
 	DeletionActionAccept,
 	DeletionActionReject,
 	DeletionActionReopen,
-	DeletionActionRevoke,
 }
 
 func (e DeletionAction) IsValid() bool {
 	switch e {
-	case DeletionActionAccept, DeletionActionReject, DeletionActionReopen, DeletionActionRevoke:
+	case DeletionActionAccept, DeletionActionReject, DeletionActionReopen:
 		return true
 	}
 	return false
@@ -234,19 +232,17 @@ const (
 	DeletionStatusActive   DeletionStatus = "ACTIVE"
 	DeletionStatusApproved DeletionStatus = "APPROVED"
 	DeletionStatusRejected DeletionStatus = "REJECTED"
-	DeletionStatusRevoked  DeletionStatus = "REVOKED"
 )
 
 var AllDeletionStatus = []DeletionStatus{
 	DeletionStatusActive,
 	DeletionStatusApproved,
 	DeletionStatusRejected,
-	DeletionStatusRevoked,
 }
 
 func (e DeletionStatus) IsValid() bool {
 	switch e {
-	case DeletionStatusActive, DeletionStatusApproved, DeletionStatusRejected, DeletionStatusRevoked:
+	case DeletionStatusActive, DeletionStatusApproved, DeletionStatusRejected:
 		return true
 	}
 	return false
@@ -293,7 +289,6 @@ const (
 	DeletionStatusFilterActive   DeletionStatusFilter = "ACTIVE"
 	DeletionStatusFilterApproved DeletionStatusFilter = "APPROVED"
 	DeletionStatusFilterRejected DeletionStatusFilter = "REJECTED"
-	DeletionStatusFilterRevoked  DeletionStatusFilter = "REVOKED"
 	DeletionStatusFilterAll      DeletionStatusFilter = "ALL"
 )
 
@@ -301,13 +296,12 @@ var AllDeletionStatusFilter = []DeletionStatusFilter{
 	DeletionStatusFilterActive,
 	DeletionStatusFilterApproved,
 	DeletionStatusFilterRejected,
-	DeletionStatusFilterRevoked,
 	DeletionStatusFilterAll,
 }
 
 func (e DeletionStatusFilter) IsValid() bool {
 	switch e {
-	case DeletionStatusFilterActive, DeletionStatusFilterApproved, DeletionStatusFilterRejected, DeletionStatusFilterRevoked, DeletionStatusFilterAll:
+	case DeletionStatusFilterActive, DeletionStatusFilterApproved, DeletionStatusFilterRejected, DeletionStatusFilterAll:
 		return true
 	}
 	return false
