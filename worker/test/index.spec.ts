@@ -20,9 +20,9 @@ function base64(bytes: ArrayBuffer): string {
 
 async function signedRequest(
 	invocation: unknown,
-	options: { tamperSignature?: boolean } = {},
+	options: { tamperSignature?: boolean; rawBody?: string } = {},
 ): Promise<WorkerRequest> {
-	const body = JSON.stringify(invocation);
+	const body = options.rawBody ?? JSON.stringify(invocation);
 	const signature = new Uint8Array(
 		await crypto.subtle.sign(
 			"Ed25519",
@@ -173,7 +173,7 @@ describe("webhook gateway", () => {
 		});
 	});
 
-	it("rejects invalid client signatures for otherwise valid invocations", async () => {
+	it("rejects non-hex client signatures for otherwise valid invocations", async () => {
 		const request = await signedRequest({
 			url: "https://client.example/hooks/longhub",
 			body: "{}",
@@ -243,6 +243,71 @@ describe("webhook gateway", () => {
 				error: "Webhook URL must target a public host",
 			});
 		}
+	});
+
+	it.each(["spki", "pem", "raw", "alias"])("accepts supported server public keys: %s", async (format) => {
+		const raw = (await crypto.subtle.exportKey("raw", keyPair.publicKey)) as ArrayBuffer;
+		const encoded = format === "raw" ? base64(raw) : format === "pem"
+			? `-----BEGIN PUBLIC KEY-----\n${publicKey}\n-----END PUBLIC KEY-----` : publicKey;
+		const env = format === "alias" ? { PUBLIC_KEY: encoded } : { SERVER_PUBLIC_KEY: encoded };
+		fetchMock.get("https://client.example").intercept({ path: "/key", method: "POST" }).reply(200, "ok");
+		const request = await signedRequest({ url: "https://client.example/key", body: "{}", clientSignature: "a1".repeat(32) });
+		const response = await worker.fetch(request, env);
+		expect(response.status).toBe(200);
+		fetchMock.assertNoPendingInterceptors();
+	});
+
+	it.each([undefined, "", "%%%", "YWJj"])("rejects missing or malformed server key configuration: %#", async (key) => {
+		const request = await signedRequest({ url: "https://client.example/hook", body: "{}", clientSignature: "a1".repeat(32) });
+		const response = await worker.fetch(request, { SERVER_PUBLIC_KEY: key });
+		expect(response.status).toBe(500);
+		expect(response.headers.get("Cache-Control")).toBe("no-store");
+	});
+
+	it.each([undefined, "%%%", "YQ==", "00".repeat(64)])("rejects missing, malformed, short, or invalid server signatures: %#", async (signature) => {
+		const headers = new Headers();
+		if (signature !== undefined) headers.set("X-Server-Signature", signature);
+		const response = await invoke(new IncomingRequest("https://gateway.example/webhook", { method: "POST", headers, body: "{}" }));
+		expect(response.status).toBe(401);
+	});
+
+	it("accepts a valid hex-encoded server signature", async () => {
+		const request = await signedRequest({ url: "https://client.example/hex", body: "{}", clientSignature: "a1".repeat(32) });
+		const signature = atob(request.headers.get("X-Server-Signature")!);
+		const hex = Array.from(signature, char => char.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+		const headers = new Headers(request.headers);
+		headers.set("X-Server-Signature", hex);
+		fetchMock.get("https://client.example").intercept({ path: "/hex", method: "POST" }).reply(200, "ok");
+		expect((await invoke(new IncomingRequest(request, { headers }))).status).toBe(200);
+		fetchMock.assertNoPendingInterceptors();
+	});
+
+	it("rejects authenticated malformed JSON", async () => {
+		const response = await invoke(await signedRequest(null, { rawBody: "{" }));
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({ error: "Invalid webhook invocation" });
+	});
+
+	it("rejects malformed target URLs", async () => {
+		const response = await invoke(await signedRequest({ url: "://invalid", body: "{}", clientSignature: "a1".repeat(32) }));
+		expect(response.status).toBe(400);
+	});
+
+	it("returns redirects without following them", async () => {
+		fetchMock.get("https://client.example").intercept({ path: "/redirect", method: "POST" })
+			.reply(302, "redirect", { headers: { Location: "http://127.0.0.1/private" } });
+		const response = await invoke(await signedRequest({ url: "https://client.example/redirect", body: "{}", clientSignature: "a1".repeat(32) }));
+		expect(response.status).toBe(302);
+		expect(response.headers.get("Location")).toBe("http://127.0.0.1/private");
+		fetchMock.assertNoPendingInterceptors();
+	});
+
+	it("returns a controlled gateway error for a network failure", async () => {
+		fetchMock.get("https://client.example").intercept({ path: "/offline", method: "POST" }).replyWithError(new Error("network unavailable"));
+		const response = await invoke(await signedRequest({ url: "https://client.example/offline", body: "{}", clientSignature: "a1".repeat(32) }));
+		expect(response.status).toBe(502);
+		expect(await response.json()).toEqual({ error: "Webhook destination could not be reached" });
+		fetchMock.assertNoPendingInterceptors();
 	});
 
 	it.each(["http://8.8.8.8", "http://[2606:4700:4700::1111]", "http://[::ffff:808:808]"])("allows public address literals: %s", async (origin) => {
