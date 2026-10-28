@@ -13,10 +13,10 @@ Download the specification:
 
 Most read-only operations do not require authorization or authentication. You can directly invoke these endpoints. To use writing or account-related operations, see below.  
 
-The [full catalog export](/catalog-sync) requires authentication even
-though it is read-only. It accepts any valid app key or session and requires no
-write permission. Its API details are documented on the catalog sync page;
-see the [Python example](/catalog-sync#examples) for a download client.
+The [full catalog export](/api/getFullSync) and [catalog version check](/api/getSyncVersion)
+require authentication even though they are read-only. They accept any valid app
+key or session and require no write permission. See the [catalog sync guide](/catalog-sync)
+for the replication workflow and a [Python download client](/catalog-sync#examples).
 
 Two types of authorization are supported, and either of them can be used to authenticate both on web and via API:
 

@@ -3,7 +3,7 @@ info:
   title: LONG Hub API
   version: 0.0.1
   description: |
-    OpenAPI description of the image, search, tag, user-image, and favorite endpoints registered by the LONG Hub backend.
+    OpenAPI description of the image, search, tag, user-image, favorite, and catalog sync endpoints registered by the LONG Hub backend.
     Successful JSON responses use the envelope `{ "error": null, "data": ... }`; validation and server errors use `{ "error": "..." }`.
     Endpoints returning no data respond with HTTP 204 and an empty body.
     Endpoints not listed here are not intended for public use, but you can still invoke them anyway, you just need to experiment yourself.
@@ -19,6 +19,118 @@ tags:
   - name: Favorites
   - name: Sync
 paths:
+  /sync/full:
+    get:
+      tags: [Sync]
+      operationId: getFullSync
+      summary: Download the full catalog
+      description: |
+        Downloads the current image catalog as an `application/x-ndjson` stream.
+        Accepts any valid app key or session through the `Authorization` header;
+        no write permission is required. See the [catalog sync guide](/catalog-sync)
+        for the replication workflow and a Python download client.
+
+        All image metadata and tags come from one read-only, repeatable-read
+        PostgreSQL snapshot. Deleted images and images without a current metadata
+        version are excluded. Replace the previous local catalog after validation
+        so that images absent from the export disappear locally.
+
+        ### Stream format
+
+        The response contains one JSON object per line, each ending with one LF byte,
+        without the usual JSON response envelope. Records appear in this order:
+
+        1. A `manifest` record with `type: "manifest"`, `schemaVersion: 1`, an opaque
+           string `exportId`, and a UTC RFC 3339 `startedAt` timestamp.
+        2. Zero or more `image` records with `type: "image"` and `data` matching the
+           image object returned by [`GET /image/:id`](/api/getImage). Records are
+           ordered by ascending image ID.
+        3. An `end` record with `type: "end"`, the matching `exportId`, the integer
+           `recordCount` of image records, and a lowercase hexadecimal `sha256` digest.
+
+        `startedAt` and `exportId` describe this download; neither is a change-feed
+        cursor. IDs are JSON integers; clients must preserve 64-bit values, for
+        example with a lossless JSON parser in JavaScript. Unknown additive object
+        fields may be ignored.
+
+        ### Validation and errors
+
+        Compute SHA-256 over the exact **uncompressed image record lines, including
+        their LF bytes**. Exclude the manifest and end record. Before accepting the
+        download, validate the schema version, matching export IDs, record count,
+        checksum, end record, and successful EOF, including gzip integrity when used.
+
+        Responses use `Cache-Control: no-store` and gzip compression when accepted.
+        Errors before streaming use the normal JSON error response. An error after
+        streaming starts aborts the export without a successful end record, even if
+        the HTTP status is already 200. Downloads cannot resume; discard incomplete
+        staging data and start another export.
+
+        By default, each backend instance allows at most 2 concurrent exports and
+        each export expires after 5 minutes. Excess requests receive HTTP 429 with
+        `Retry-After: 5`. Deployments can configure these limits.
+      security:
+        - LongHubAuth: []
+      parameters:
+        - name: Accept-Encoding
+          in: header
+          description: Send gzip to request a compressed export.
+          schema:
+            type: string
+            example: gzip
+      responses:
+        '200':
+          description: NDJSON catalog stream; accept only after validating the complete export.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+            Content-Encoding:
+              description: Present with value gzip when the response is compressed.
+              schema:
+                type: string
+                enum: [gzip]
+            Vary:
+              schema:
+                type: string
+                example: Accept-Encoding
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+                description: LF-terminated JSON records in manifest, image, end order; not a JSON array.
+              examples:
+                emptyCatalog:
+                  summary: Complete export of an empty catalog
+                  value: |
+                    {"type":"manifest","schemaVersion":1,"exportId":"example-export","startedAt":"2026-10-27T08:30:00Z"}
+                    {"type":"end","exportId":"example-export","recordCount":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Too many active exports; retry after the indicated delay.
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying.
+              schema:
+                type: string
+                example: '5'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Too many active exports; retry later
+        '500':
+          description: Unable to export catalog; returned only before streaming starts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Unable to export catalog
+
   /sync/version:
     get:
       tags: [Sync]

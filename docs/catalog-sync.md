@@ -35,8 +35,8 @@ committed concurrently with it.
 
 ## Download a full export
 
-Send `GET /sync/full` with either `Authorization: Key <app-key>` or
-`Authorization: Session <session-token>`.
+Use [`GET /sync/full`](/api/getFullSync) to download the current catalog as an
+NDJSON stream. It accepts the same authentication as `/sync/version`.
 
 ```sh
 curl --fail --compressed \
@@ -44,33 +44,9 @@ curl --fail --compressed \
   https://api.example.com/sync/full --output staging.ndjson
 ```
 
-The response is `application/x-ndjson`, with `Cache-Control: no-store`. It is
-gzip-compressed when the request accepts gzip. HTTP errors before streaming use
-the normal JSON error response. An error after streaming starts aborts the export
-without a successful end record, even if the HTTP status is already 200.
-
-Records appear in this order:
-
-1. A manifest: `{"type":"manifest","schemaVersion":1,"exportId":"…","startedAt":"…"}`.
-2. Zero or more `{"type":"image","data":{…}}` records, ordered by ascending
-   image ID. `data` has the same shape as the `data` returned by [`GET /image/:id`](/api/getImage).
-3. An end record: `{"type":"end","exportId":"…","recordCount":123,"sha256":"…"}`.
-
-Each record ends with one LF byte. The SHA-256 is the lowercase hexadecimal digest
-of the exact **uncompressed image record lines, including their LF bytes**. Exclude
-the manifest and end record. Validate the schema version, matching export IDs,
-record count, checksum, end record, and successful EOF (including gzip integrity)
-before accepting the download. Unknown additive object fields may be ignored.
-
-All image metadata and tags come from one read-only, repeatable-read PostgreSQL
-snapshot. Deleted images and images without a current metadata version are
-excluded. A refresh must **replace** the previous catalog, rather than only
-upserting returned images, so that absent images disappear locally.
-
-Downloads cannot resume. Discard incomplete staging data and start another export.
-`startedAt` and `exportId` describe this download; neither is a change-feed cursor.
-IDs are JSON integers, as in the existing API; clients must preserve 64-bit values
-(for example, use a lossless JSON parser in JavaScript).
+Validate the complete download before **replacing** your local catalog; images
+absent from the export must be removed locally. The [API reference](/api/getFullSync)
+defines the record format, checksum validation, error handling, and export limits.
 
 The standard-library [Python example](#examples)
 validates the stream and atomically replaces a local file only after success:
@@ -122,8 +98,3 @@ delivery guarantee.
 ## Examples
 
 <<< ./examples/fetch_catalog.py
-
-## Restrictions
-
-- At most 2 concurrent sync connections are allowed. Excess requests receive 429 and `Retry-After: 5`.
-- A sync connection expires after 5 minutes.
