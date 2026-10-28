@@ -69,7 +69,7 @@ func TestDeletionMigrationAndFilters(t *testing.T) {
 			t.Fatalf("%+v: %v total%d %v", tc, ids, total, err)
 		}
 	}
-	if _, err := provider.Down(ctx); err != nil {
+	if _, err := provider.DownTo(ctx, 20261003101000); err != nil {
 		t.Fatal(err)
 	}
 	var owner int64

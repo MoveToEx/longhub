@@ -11,13 +11,14 @@ import (
 	"long/internal/utils"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-func TestSyncVersionAuthentication(t *testing.T) {
+func TestSyncRoutesAuthentication(t *testing.T) {
 	pool, _ := testutil.Database(t)
 	testutil.Seed(t, pool)
 	db.Init(context.Background(), pool)
@@ -38,25 +39,36 @@ func TestSyncVersionAuthentication(t *testing.T) {
 	}
 	router := gin.New()
 	RegisterRoutes(router)
-	for _, auth := range []string{"", "Key invalid", "Key sync-read-only", "Session " + token} {
-		req := httptest.NewRequest("GET", "/sync/version", nil)
-		if auth != "" {
-			req.Header.Set("Authorization", auth)
-		}
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-		if auth == "" || auth == "Key invalid" {
-			if rec.Code != http.StatusUnauthorized {
-				t.Fatalf("auth %q: status = %d, want 401", auth, rec.Code)
+	for _, path := range []string{"/sync/version", "/sync/full"} {
+		for _, auth := range []string{"", "Key invalid", "Key sync-read-only", "Session " + token} {
+			req := httptest.NewRequest("GET", path, nil)
+			if auth != "" {
+				req.Header.Set("Authorization", auth)
 			}
-			continue
-		}
-		var body struct {
-			Error *string
-			Data  struct{ Timestamp *time.Time }
-		}
-		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusOK || body.Error != nil || body.Data.Timestamp == nil {
-			t.Fatalf("auth %q: response = %d %s, decode error = %v", auth, rec.Code, rec.Body.String(), err)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if auth == "" || auth == "Key invalid" {
+				if rec.Code != http.StatusUnauthorized {
+					t.Fatalf("auth %q: status = %d, want 401", auth, rec.Code)
+				}
+				continue
+			}
+			if rec.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("sync route can be cached", path)
+			}
+			if path == "/sync/full" {
+				if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/x-ndjson" || !strings.Contains(rec.Body.String(), `"type":"manifest"`) || !strings.Contains(rec.Body.String(), `"type":"end"`) {
+					t.Fatal("registered full-sync route did not export", rec.Code, rec.Body.String())
+				}
+				continue
+			}
+			var body struct {
+				Error *string
+				Data  struct{ Timestamp *time.Time }
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusOK || body.Error != nil || body.Data.Timestamp == nil {
+				t.Fatalf("auth %q: response = %d %s, decode error = %v", auth, rec.Code, rec.Body.String(), err)
+			}
 		}
 	}
 }

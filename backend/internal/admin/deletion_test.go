@@ -13,6 +13,36 @@ import (
 	"testing"
 )
 
+func TestDeletionGraphQLRejectReopenAndAccept(t *testing.T) {
+	pool, _ := testutil.Database(t)
+	testutil.Seed(t, pool)
+	ctx := context.Background()
+	db.Init(ctx, pool)
+	t.Cleanup(func() { db.Init(ctx, nil) })
+	q := sqlc.New(pool)
+	id, err := q.CreateDeletionRequest(ctx, sqlc.CreateDeletionRequestParams{ImageID: 1, UserID: 2, Reason: "duplicate"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := `mutation($id:ID!,$action:DeletionAction!,$expectedStatus:DeletionStatus!){moderateDeletionRequest(id:$id,action:$action,expectedStatus:$expectedStatus){status}}`
+	for _, step := range []struct{ action, before, after string }{
+		{"REJECT", "ACTIVE", "REJECTED"}, {"REOPEN", "REJECTED", "ACTIVE"},
+		{"REJECT", "ACTIVE", "REJECTED"}, {"ACCEPT", "REJECTED", "APPROVED"},
+	} {
+		result := invokeGraphQL(t, 1, 8, query, map[string]any{"id": id, "action": step.action, "expectedStatus": step.before})
+		if len(result.Errors) != 0 {
+			t.Fatal(result.Errors)
+		}
+		row, err := q.GetDeletionRequestRecord(ctx, id)
+		if err != nil || strings.ToUpper(string(row.Status)) != step.after || row.ImageDeletedAt.Valid != (step.after == "APPROVED") {
+			t.Fatal("wrong moderation transition", step, row, err)
+		}
+		if row.ProcessedAt.Valid != (step.after != "ACTIVE") || row.ProcessedBy.Valid != (step.after != "ACTIVE") {
+			t.Fatal("reopening did not clear decision metadata", step, row)
+		}
+	}
+}
+
 func TestDeletionGraphQLIntegration(t *testing.T) {
 	pool, _ := testutil.Database(t)
 	testutil.Seed(t, pool)

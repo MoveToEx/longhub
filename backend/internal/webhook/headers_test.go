@@ -33,6 +33,11 @@ func TestRenderHeadersUsesBodyTemplateFieldsAsPlainText(t *testing.T) {
 }
 
 func TestRenderHeadersRejectsInvalidConfigurationAndOutput(t *testing.T) {
+	for _, event := range []string{"restore", "unknown"} {
+		if _, err := RenderHeaders(nil, event, Data{}, nil); err == nil {
+			t.Errorf("accepted unsupported header event %q", event)
+		}
+	}
 	data := PreviewData("update")
 	data.Text = "caption\r\nInjected: true"
 	for _, headers := range []map[string]string{

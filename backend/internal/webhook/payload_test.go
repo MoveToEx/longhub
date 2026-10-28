@@ -79,8 +79,10 @@ func TestRenderRejectsInvalidTemplates(t *testing.T) {
 			t.Errorf("expected error for template %.80q", bodyTemplate)
 		}
 	}
-	if _, err := Render("{}", "invalid", Data{}, nil); err == nil {
-		t.Error("expected invalid event error")
+	for _, event := range []string{"invalid", "unknown", "restore"} {
+		if _, err := Render("{}", event, Data{}, nil); err == nil {
+			t.Errorf("accepted unsupported event %q", event)
+		}
 	}
 }
 

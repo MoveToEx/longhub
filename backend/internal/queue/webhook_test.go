@@ -103,32 +103,32 @@ func TestInvokeTaskPreservesUserIdentities(t *testing.T) {
 	}
 }
 
-func TestDeletionInvocationAndLegacyDeletion(t *testing.T) {
-	data, err := json.Marshal(webhook.PreviewData("delete"))
-	if err != nil {
-		t.Fatal(err)
+func TestInvocationEventNames(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		eventType int64
+	}{
+		{"create", db.WebhookCreationEvent}, {"update", db.WebhookUpdateEvent}, {"delete", db.WebhookDeletionEvent},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, name := range []string{"", tc.name} {
+				got, err := invocationEventName(tc.eventType, name)
+				if err != nil || got != tc.name {
+					t.Fatal(got, err)
+				}
+			}
+			for _, name := range []string{"create", "update", "delete", "restore", "unknown"} {
+				if name == tc.name {
+					continue
+				}
+				if _, err := invocationEventName(tc.eventType, name); err == nil {
+					t.Fatalf("accepted %q for %s subscription", name, tc.name)
+				}
+			}
+		})
 	}
-	for _, template := range []string{"", `{"event": {{json .Event}}, "data": {{json .Data}}}`} {
-		for _, event := range []string{"", "delete"} {
-			body, err := buildInvocationBody(db.WebhookDeletionEvent, data, template, nil, event)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var payload webhook.Payload
-			if err := json.Unmarshal(body, &payload); err != nil {
-				t.Fatal(err)
-			}
-			want := event
-			if want == "" {
-				want = "delete"
-			}
-			if payload.Event != want || payload.Data.ImageID != 42 {
-				t.Fatalf("unexpected lifecycle payload: %+v", payload)
-			}
-		}
-	}
-	if _, err := buildInvocationBody(db.WebhookUpdateEvent, data, "", nil, "delete"); err == nil {
-		t.Fatal("deletion escaped its subscription")
+	if _, err := invocationEventName(0, ""); err == nil {
+		t.Fatal("accepted unsupported subscription type")
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"long/internal/testutil"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -22,7 +23,8 @@ import (
 func TestIndexUsesCurrentStateAndSerializesModeration(t *testing.T) {
 	pool, transact := testutil.Database(t)
 	testutil.Seed(t, pool)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	db.Init(ctx, pool)
 	t.Cleanup(func() { db.Init(ctx, nil) })
 	q := sqlc.New(pool)
@@ -31,31 +33,76 @@ func TestIndexUsesCurrentStateAndSerializesModeration(t *testing.T) {
 		t.Fatal(err)
 	}
 	entered, release := make(chan struct{}), make(chan struct{})
+	releaseIndex := sync.OnceFunc(func() { close(release) })
+	var workers sync.WaitGroup
+	defer func() {
+		releaseIndex()
+		cancel()
+		finished := make(chan struct{})
+		go func() { workers.Wait(); close(finished) }()
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Error("test workers did not stop after cancellation")
+		}
+	}()
 	indexDone, moderateDone := make(chan error, 1), make(chan error, 1)
+	workers.Add(1)
 	go func() {
+		defer workers.Done()
 		indexDone <- queue.SyncImageIndexForTest(ctx, queue.IndexArgs{ImageID: 1, VersionID: 1}, transact, func(_ context.Context, _ int64, doc *queue.IndexPayloadItem) error {
 			if doc == nil {
 				return errors.New("unexpected removal")
 			}
 			close(entered)
-			<-release
-			return nil
+			select {
+			case <-release:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		})
 	}()
-	<-entered
-	go func() { moderateDone <- moderateDeletion(ctx, id, "ACCEPT", "active") }()
 	select {
-	case err := <-moderateDone:
-		t.Fatalf("moderation bypassed index lock: %v", err)
-	case <-time.After(50 * time.Millisecond):
+	case <-entered:
+	case err := <-indexDone:
+		t.Fatalf("indexing ended before taking the lock: %v", err)
+	case <-ctx.Done():
+		t.Fatal("indexing never entered the locked write", ctx.Err())
 	}
-	close(release)
-	if err := <-indexDone; err != nil {
-		t.Fatal(err)
+	workers.Add(1)
+	go func() { defer workers.Done(); moderateDone <- moderateDeletion(ctx, id, "ACCEPT", "active") }()
+	// The isolated database has only these two operations. Observe actual PostgreSQL
+	// lock contention before releasing indexing, instead of relying on scheduling delays.
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	blocked := false
+	for !blocked {
+		select {
+		case err := <-moderateDone:
+			t.Fatalf("moderation bypassed the index lock: %v", err)
+		case <-ctx.Done():
+			t.Fatal("moderation never reached the contested lock", ctx.Err())
+		case <-ticker.C:
+			if err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND cardinality(pg_blocking_pids(pid))>0)").Scan(&blocked); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
-	if err := <-moderateDone; err != nil {
-		t.Fatal(err)
+	releaseIndex()
+	await := func(done <-chan error) {
+		t.Helper()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-ctx.Done():
+			t.Fatal("operation did not complete after releasing the lock", ctx.Err())
+		}
 	}
+	await(indexDone)
+	await(moderateDone)
 	pending, err := q.GetUnindexedImages(ctx)
 	if err != nil || len(pending) != 1 || pending[0].ImageID != 1 || pending[0].VersionID != 0 {
 		t.Fatalf("deleted image must remain eligible for reconciliation: %+v %v", pending, err)

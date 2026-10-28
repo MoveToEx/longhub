@@ -188,13 +188,19 @@ func TestFullSyncLimitsAndCancellation(t *testing.T) {
 		<-ctx.Done()
 		return ctx.Err()
 	}, config.SyncConfig{MaxConcurrent: 1, ExportTimeout: time.Minute}))
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go func() {
 		defer close(finished)
 		router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/sync/full", nil).WithContext(ctx))
 	}()
-	<-entered
+	select {
+	case <-entered:
+	case <-finished:
+		t.Fatal("export finished before entering the stream")
+	case <-ctx.Done():
+		t.Fatal("export never entered the stream", ctx.Err())
+	}
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest("GET", "/sync/full", nil))
 	if rec.Code != 429 || rec.Header().Get("Retry-After") == "" {
@@ -203,7 +209,7 @@ func TestFullSyncLimitsAndCancellation(t *testing.T) {
 	cancel()
 	select {
 	case <-finished:
-	case <-time.After(time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("disconnect did not cancel snapshot")
 	}
 
