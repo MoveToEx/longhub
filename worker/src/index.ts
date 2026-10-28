@@ -188,6 +188,14 @@ function isPrivateIpv6(hostname: string): boolean {
 	if (mapped) {
 		return isPrivateIpv4(mapped[1]);
 	}
+	// URL parsing canonicalizes IPv4-mapped literals such as ::ffff:127.0.0.1
+	// into hexadecimal groups. Apply the same IPv4 range rules to that form.
+	const mappedHex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+	if (mappedHex) {
+		const high = Number.parseInt(mappedHex[1], 16);
+		const low = Number.parseInt(mappedHex[2], 16);
+		return isPrivateIpv4(`${high >>> 8}.${high & 255}.${low >>> 8}.${low & 255}`);
+	}
 
 	if (lower === "::" || lower === "::1") return true;
 	const firstGroup = lower.split(":")[0];

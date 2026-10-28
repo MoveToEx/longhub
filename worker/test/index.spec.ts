@@ -206,6 +206,28 @@ describe("webhook gateway", () => {
 			"http://[::1]/hook",
 			"http://localhost/hook",
 			"http://internal.example.internal/hook",
+			"http://0.0.0.0/hook",
+			"http://100.64.0.1/hook",
+			"http://172.31.255.254/hook",
+			"http://192.0.2.1/hook",
+			"http://198.18.0.1/hook",
+			"http://198.51.100.1/hook",
+			"http://203.0.113.1/hook",
+			"http://224.0.0.1/hook",
+			"http://255.255.255.255/hook",
+			"http://[::]/hook",
+			"http://[fc00::1]/hook",
+			"http://[fd00::1]/hook",
+			"http://[fe80::1]/hook",
+			"http://[ff02::1]/hook",
+			"http://[::ffff:127.0.0.1]/hook",
+			"http://[::ffff:c0a8:101]/hook",
+			"http://sub.localhost/hook",
+			"http://service.local/hook",
+			"http://service.lan/hook",
+			"http://service.home/hook",
+			"http://service.test/hook",
+			"http://service.invalid/hook",
 		];
 
 		for (const url of blocked) {
@@ -221,6 +243,13 @@ describe("webhook gateway", () => {
 				error: "Webhook URL must target a public host",
 			});
 		}
+	});
+
+	it.each(["http://8.8.8.8", "http://[2606:4700:4700::1111]", "http://[::ffff:808:808]"])("allows public address literals: %s", async (origin) => {
+		fetchMock.get(origin).intercept({ path: "/public", method: "POST" }).reply(200, "ok");
+		const response = await invoke(await signedRequest({ url: origin + "/public", body: "{}", clientSignature: "a1".repeat(32) }));
+		expect(response.status).toBe(200);
+		fetchMock.assertNoPendingInterceptors();
 	});
 
 	it("only accepts POST requests", async () => {
