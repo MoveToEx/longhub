@@ -73,9 +73,9 @@ test('with blocks handle optional update changes', () => {
 
 test('comments and trim markers are interpreted as Go template syntax', () => {
   assert.deepEqual(JSON.parse(renderWebhookBodyPreview(
-    '{{/* sample */}} {"id": {{- .Data.ImageID -}} }',
+    '{{/* sample */}} {"text": "before  {{- .Event -}}  after"}',
     'delete',
-  )), { id: 42 });
+  )), { text: 'beforedeleteafter' });
 });
 
 test('invalid syntax, fields, functions and rendered JSON produce errors', () => {
@@ -117,4 +117,12 @@ test('header previews reject invalid names, templates, values and case-insensiti
   }
   assert.throws(() => renderWebhookHeadersPreview([{ name: 'X-Test', value: 'a' }, { name: 'x-test', value: 'b' }], 'create'), /Duplicate header/);
   assert.throws(() => renderWebhookHeadersPreview(Array.from({ length: 33 }, (_, i) => ({ name: `X-${i}`, value: 'value' })), 'create'), /32 custom headers/);
+  assert.throws(() => renderWebhookHeadersPreview(
+    Array.from({ length: 9 }, (_, i) => ({ name: `X-${i}`, value: '{{/*' + 'x'.repeat(8000) + '*/}}' })),
+    'create',
+  ), /Header templates exceed 64 KiB/);
+  assert.throws(() => renderWebhookHeadersPreview(
+    Array.from({ length: 9 }, (_, i) => ({ name: `X-${i}`, value: '{{range .Tags}}' + 'x'.repeat(4000) + '{{end}}' })),
+    'create',
+  ), /Rendered headers exceed 64 KiB/);
 });

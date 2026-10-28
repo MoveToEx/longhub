@@ -108,19 +108,6 @@ describe('admin access', () => {
     expect(hasRootPermission(undefined)).toBe(false);
   });
 
-  it.each([null, 3, 128])(
-    'blocks direct routes and hides the entrance for permission %s',
-    async (permission) => {
-      if (permission !== null) signIn(permission);
-      mount('/admin/users', true);
-      expect(screen.getByRole('heading', { name: 'Admin access required' })).toBeTruthy();
-      expect(screen.queryByRole('link', { name: 'Admin' })).toBeNull();
-      expect(screen.queryByRole('table')).toBeNull();
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      expect(mocks.post).not.toHaveBeenCalled();
-    },
-  );
-
   it('waits for identity loading before mounting pages', () => {
     signIn();
     mocks.auth.isLoading = true;

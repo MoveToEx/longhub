@@ -166,7 +166,7 @@ it("prevents ordinary admins from editing Root accounts", async () => {
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
-it("preserves R when a Root user edits another Root account", async () => {
+it("lets Root edit another Root account without sending the protected R bit", async () => {
   mocks.auth.data.permission = 16;
   managedUser.permission = 24;
   mount();
@@ -175,5 +175,9 @@ it("preserves R when a Root user edits another Root account", async () => {
   await transferPermission(dialog, "Admin", "revoke");
   await userEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  expect(managedUser.permission).toBe(16);
+  expect(mocks.post).toHaveBeenCalledWith(
+    "/admin/graphql",
+    expect.objectContaining({ variables: { id: managedUser.id, input: { email: "old@example.com", permission: 0 } } }),
+    { headers: { Authorization: "Session admin-session" } },
+  );
 });

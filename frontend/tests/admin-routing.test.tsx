@@ -52,10 +52,15 @@ it('reveals the admin entrance and redirects the production admin root to images
   expect(mocks.post.mock.calls[0][1].variables.input.status).toBe('ACTIVE');
 });
 
-it.each(['/admin/images', '/admin/users', '/admin/deletions'])(
-  'guards the production route %s before making admin requests',
-  (path) => {
-    mocks.auth.data = { id: 1, username: 'ordinary-user', permission: 4 } as Identity;
+it.each(
+  ['/admin/images', '/admin/users', '/admin/deletions'].flatMap(path =>
+    [null, 3, 128].map(permission => ({ path, permission })),
+  ),
+)(
+  'guards $path for permission $permission before making admin requests',
+  ({ path, permission }) => {
+    mocks.auth.data = permission === null ? null : { id: 1, username: 'ordinary-user', permission } as Identity;
+    mocks.auth.session = permission === null ? '' : 'admin-session';
     mount(path);
     expect(screen.getByRole('heading', { name: 'Admin access required' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Admin' })).toBeNull();

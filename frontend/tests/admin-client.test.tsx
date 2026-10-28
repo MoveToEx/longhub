@@ -8,7 +8,7 @@ afterEach(() => {
   api.defaults.adapter = originalAdapter;
 });
 
-it('binds authorization to the session in the query cache key', async () => {
+it('uses the requested session instead of a newer stored session', async () => {
   localStorage.setItem('nmsl-session', JSON.stringify('newer-session'));
   const adapter: AxiosAdapter = async (config) => {
     expect(config.headers.get('Authorization')).toBe('Session requested-session');
