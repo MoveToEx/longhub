@@ -1,7 +1,20 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: ["sql/query.sql", "sql/deletion.sql", "sql/sync.sql"]
+    queries:
+      - "sql/admin.sql"
+      - "sql/appkey.sql"
+      - "sql/deletion.sql"
+      - "sql/favorite.sql"
+      - "sql/image.sql"
+      - "sql/search.sql"
+      - "sql/sync.sql"
+      - "sql/tag.sql"
+      - "sql/upload.sql"
+      - "sql/user.sql"
+      - "sql/version.sql"
+      - "sql/webauthn.sql"
+      - "sql/webhook.sql"
     schema: "sql/schema.sql"
     gen:
       go:
